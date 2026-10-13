@@ -62,6 +62,14 @@ jobs:
           test -s "$dst/twrp_sm8850.mk"
           test -s "$dst/prebuilt/kernel"
           test -s "$dst/AndroidProducts.mk"
+          # Exercise the actual staging operation BEFORE the 74G checkout.
+          bash -n scripts/stage-public-sm8850-tree.sh
+          test ! -d "$RUNNER_TEMP/staging-check/device/xiaomi"
+          bash scripts/stage-public-sm8850-tree.sh \
+            "$dst" "$RUNNER_TEMP/staging-check/device/xiaomi/sm8850"
+          test -s "$RUNNER_TEMP/staging-check/device/xiaomi/sm8850/prebuilt/kernel"
+          cmp -s "$dst/prebuilt/kernel" \
+            "$RUNNER_TEMP/staging-check/device/xiaomi/sm8850/prebuilt/kernel"
           grep -Fq 'PRODUCT_NAME := twrp_sm8850' "$dst/twrp_sm8850.mk"
           grep -Fq 'TARGET_PREBUILT_KERNEL' "$dst/BoardConfig.mk"
           git -C "$dst" rev-parse HEAD
