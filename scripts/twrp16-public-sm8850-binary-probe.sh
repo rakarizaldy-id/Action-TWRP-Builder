@@ -30,7 +30,7 @@ df -hT "$SRC" | tee "$LOGS/before-build-disk.txt"
 # No -j override, following the user's explicit build target instructions.
 started="$SECONDS"
 setsid timeout --signal=TERM --kill-after=40s 14400s \
-  bash -c 'set -euo pipefail; source build/envsetup.sh; export ALLOW_MISSING_DEPENDENCIES=true; lunch twrp_sm8850; m recovery' \
+  bash -c 'set -eo pipefail; source build/envsetup.sh; export ALLOW_MISSING_DEPENDENCIES=true; lunch twrp_sm8850; m recovery' \
   > "$LOGS/m-recovery-build.log" 2>&1 &
 pid="$!"
 checks=0
