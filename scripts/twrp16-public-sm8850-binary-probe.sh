@@ -22,18 +22,11 @@ test -d "$SRC/vendor/twrp"
 test ! -e "$SRC/device/xiaomi/songyuan"
 test ! -e "$GITHUB_WORKSPACE/.songyuan-oem"
 cd "$SRC"
-TREE="device/xiaomi/sm8850"
-if [[ -e "$TREE" ]]; then
-  echo "::error::Unexpected device tree already present; refuse overwrite"
-  exit 30
-fi
-# Public tree was cloned and inspected BEFORE the 74G sync.
-# Reuse that exact source instead of cloning/checking unknown files late.
-test -s "$RUNNER_TEMP/public-sm8850-tree/prebuilt/kernel" || {
-  echo "::error::Public YuKongA preflight tree missing"
-  exit 31
-}
-cp -a "$RUNNER_TEMP/public-sm8850-tree" "$TREE"
+TREE="$SRC/device/xiaomi/sm8850"
+# Reuse the public tree verified before source sync. The staging helper creates
+# missing parent directories and refuses to overwrite any existing device tree.
+bash "$GITHUB_WORKSPACE/scripts/stage-public-sm8850-tree.sh" \
+  "$RUNNER_TEMP/public-sm8850-tree" "$TREE"
 git -C "$TREE" rev-parse HEAD | tee "$LOGS/public-device-tree-SHA.txt"
 df -hT "$SRC" | tee "$LOGS/before-build-disk.txt"
 
