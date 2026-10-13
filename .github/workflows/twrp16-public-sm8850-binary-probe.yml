@@ -42,8 +42,12 @@ jobs:
         run: bash scripts/songyuan-twrp16-full-source-sync.sh
 
       - name: Compile PUBLIC upstream YuKongA SM8850 m recovery (no private OEM)
+        # AOSP envsetup.sh must not be sourced under bash nounset (-u).
+        # The script uses plain m recovery, never m recoveryimage.
         shell: bash
-        run: bash scripts/twrp16-public-sm8850-binary-probe.sh
+        run: |
+          bash -n scripts/twrp16-public-sm8850-binary-probe.sh
+          bash scripts/twrp16-public-sm8850-binary-probe.sh
 
       - name: Save public generic binary compile logs and source diagnostics
         if: always()
