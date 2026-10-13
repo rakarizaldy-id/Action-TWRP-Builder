@@ -1,0 +1,68 @@
+name: TWRP16 generic SM8850 recovery binary compile (PUBLIC source only)
+
+on:
+  push:
+    branches:
+      - twrp16-songyuan-source-probe
+    paths:
+      - .github/workflows/twrp16-public-sm8850-binary-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: twrp16-generic-sm8850-binary-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compile_public_generic_recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - name: Checkout public fork (no credentials retained)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Reclaim public runner disk
+        uses: rokibhasansagar/slimhub_actions@c2a6e4317d3de2b623ac7395b05e9d2149e8289b
+
+      - name: Install generic Android build tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git curl ca-certificates python3 bc bison flex gperf zip unzip rsync \
+            libxml2-utils libssl-dev liblz4-tool zstd build-essential lz4 cpio
+          df -hT "$GITHUB_WORKSPACE"
+
+      - name: Sync 392 official TWRP16 projects with 25GiB disk guard
+        shell: bash
+        run: bash scripts/songyuan-twrp16-full-source-sync.sh
+
+      - name: Compile PUBLIC upstream YuKongA SM8850 m recovery (no private OEM)
+        shell: bash
+        run: bash scripts/twrp16-public-sm8850-binary-probe.sh
+
+      - name: Save public generic binary compile logs and source diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: twrp16-public-sm8850-build-logs-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/songyuan-full-source-sync/
+            ${{ runner.temp }}/twrp16-sm8850-public-binary/
+          if-no-files-found: warn
+          retention-days: 3
+          compression-level: 6
+
+      - name: Save generic ARM64 recovery binary (not Songyuan OEM build)
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TWRP16-GENERIC-SM8850-BINARY-NOT-FLASHABLE-${{ github.run_id }}
+          path: ${{ runner.temp }}/twrp16-sm8850-public-binary-out/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 1
