@@ -1,0 +1,6 @@
+PUBLIC ONLY — explicit post-static-audit generic YuKongA SM8850 TWRP16 binary build request.
+Triggered after the quick CI static audits PASS; only upstream PUBLIC TWRP16 and YuKongA code permitted.
+Command: source build/envsetup.sh; lunch twrp_sm8850; m recovery
+No -j, no m recoveryimage, no Songyuan OEM private, no stock recovery modification, no phone.
+Reason for run: preceding full source sync was 392/392, but an externally reported runner shutdown signal 143 interrupted Soong bootstrap before compilation completed. New logs collect RAM/oom/disk and envsetup/lunch checkpoints.
+Request tag: audit-2026-10-13-post-run-38392955562
