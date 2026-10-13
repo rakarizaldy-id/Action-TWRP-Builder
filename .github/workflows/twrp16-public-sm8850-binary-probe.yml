@@ -51,6 +51,22 @@ jobs:
           test ! -e "$GITHUB_WORKSPACE/twrp/device/xiaomi/songyuan"
           echo "Static CI/tool/privacy preflight PASS; no private OEM and no image."
 
+      - name: Verify public YuKongA device tree BEFORE 74G source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          dst="$RUNNER_TEMP/public-sm8850-tree"
+          git clone --depth=1 --single-branch --branch twrp-16.0 \
+            https://github.com/YuKongA/twrp_device_xiaomi_sm8850.git "$dst"
+          test -s "$dst/BoardConfig.mk"
+          test -s "$dst/twrp_sm8850.mk"
+          test -s "$dst/prebuilt/kernel"
+          test -s "$dst/AndroidProducts.mk"
+          grep -Fq 'PRODUCT_NAME := twrp_sm8850' "$dst/twrp_sm8850.mk"
+          grep -Fq 'TARGET_PREBUILT_KERNEL' "$dst/BoardConfig.mk"
+          git -C "$dst" rev-parse HEAD
+          echo "YuKongA public upstream preflight PASS before official 392-project sync."
+
       - name: Sync 392 official TWRP16 projects with 25GiB disk guard
         shell: bash
         run: bash scripts/songyuan-twrp16-full-source-sync.sh
