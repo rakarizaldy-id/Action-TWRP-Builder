@@ -76,6 +76,12 @@ jobs:
           assert not any(s in build for s in ('m recovery -j','make recoveryimage','/songyuan-id305-curated'))
           assert 'build-requests/public-sm8850-compile.txt' in wf
           assert 'Verify public YuKongA device tree BEFORE 74G source checkout' in wf
+          assert 'pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761' in wf
+          assert 'swap-size-gb: 30' in wf
+          assert 'swapon --show' in wf
+          assert wf.index('Sync 392 official TWRP16 projects') < wf.index('Create 30 GB swap') < wf.index('Compile PUBLIC upstream YuKongA SM8850 m recovery')
+          assert 'swap_total_kib < 26214400' in wf
+          assert 'free_kib < 25165824' in wf
           assert 'Static preflight before expensive source checkout' in wf
           assert 'bash -n scripts/twrp16-public-sm8850-binary-probe.sh' in wf
           assert 'm recoveryimage' not in wf.lower().replace('never m recoveryimage','')
