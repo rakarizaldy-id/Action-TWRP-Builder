@@ -79,6 +79,30 @@ jobs:
         shell: bash
         run: bash scripts/songyuan-twrp16-full-source-sync.sh
 
+      - name: Create 30 GB swap (proven on successful OFRP DASH CI)
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+        with:
+          swap-size-gb: 30
+
+      - name: Verify post-swap memory and enough remaining disk for compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          free -h
+          df -hT "$GITHUB_WORKSPACE"
+          swapon --show
+          swap_total_kib="$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)"
+          free_kib="$(df -Pk "$GITHUB_WORKSPACE" | awk 'END {print $4}')"
+          if (( swap_total_kib < 26214400 )); then
+            echo "::error::Swap is below 25 GiB; refusing high-memory Soong bootstrap"
+            exit 41
+          fi
+          if (( free_kib < 25165824 )); then
+            echo "::error::Less than 24 GiB free after allocating swap; refusing build"
+            exit 42
+          fi
+          echo "PASS: swap is enabled and enough disk remains for binary-only build"
+
       - name: Compile PUBLIC upstream YuKongA SM8850 m recovery (no private OEM)
         # AOSP envsetup.sh must not be sourced under bash nounset (-u).
         # The script uses plain m recovery, never m recoveryimage.
