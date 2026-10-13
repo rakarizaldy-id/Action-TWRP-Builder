@@ -1,7 +1,8 @@
-PUBLIC ONLY — second explicitly approved generic YuKongA SM8850 TWRP16 m recovery build, post-regression-test.
-Previous run 38400919072 failed because a bare cp to device/xiaomi/sm8850 had no parent directory, after 392/392 sync.
-NOW: isolated guarded staging helper creates missing parents and checks identical copied files. Real empty-hierarchy fixture regression PASS (38419419972), updated full static audit PASS (38419507764).
-Run precheck clones and stages real public YuKongA source before expensive 74G TWRP16 sync; any staging error must fail early.
-Command exactly: source build/envsetup.sh; lunch twrp_sm8850; m recovery.
-NO -j, NO m recoveryimage, NO Songyuan private OEM/assets, NO stock recovery changes, NO phone access.
-Request tag: 2026-10-13-stage-parent-verified-second-audit
+PUBLIC-ONLY authorized build request, 2026-10-14 (Asia/Jakarta).
+User explicitly said "gas" after explanation of testing GitHub Actions TWRP16 with the same 30GB swap strategy verified successful on OFRP DASH.
+Workflow: .github/workflows/twrp16-public-sm8850-binary-probe.yml
+Execute: checkout upstream TWRP16 392 projects, stage only public upstream YuKongA SM8850, allocate 30GB swap AFTER checkout, verify >=25GiB swap and >=24GiB disk free, then source build/envsetup.sh; lunch twrp_sm8850; m recovery.
+Build one AArch64 recovery executable (if possible) and diagnostics, never m recoveryimage; no -j override.
+NO private Songyuan ID305 OEM or proprietary repo, NO phone, NO flashing, NO stock recovery patching.
+This is a PUBLIC generic SM8850 toolchain test, not a device-specific Songyuan binary.
+First post-swap attempt; previous run 38419762913 exhausted 3GB swap with Soong under severe memory pressure.
