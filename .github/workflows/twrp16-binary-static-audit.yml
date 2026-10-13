@@ -6,6 +6,7 @@ on:
       - twrp16-songyuan-source-probe
     paths:
       - scripts/twrp16-public-sm8850-binary-probe.sh
+      - scripts/stage-public-sm8850-tree.sh
       - scripts/songyuan-twrp16-full-source-sync.sh
       - .github/workflows/twrp16-public-sm8850-binary-probe.yml
       - .github/workflows/twrp16-binary-static-audit.yml
@@ -29,6 +30,28 @@ jobs:
           set -euo pipefail
           bash -n scripts/songyuan-twrp16-full-source-sync.sh
           bash -n scripts/twrp16-public-sm8850-binary-probe.sh
+          bash -n scripts/stage-public-sm8850-tree.sh
+          # Execute REAL staging into a fresh hierarchy deliberately missing device/xiaomi.
+          fixture="$(mktemp -d)"
+          trap 'rm -rf "$fixture"' EXIT
+          mkdir -p "$fixture/upstream/prebuilt"
+          printf 'BoardConfig known-good\n' > "$fixture/upstream/BoardConfig.mk"
+          printf 'android products known-good\n' > "$fixture/upstream/AndroidProducts.mk"
+          printf 'PRODUCT_NAME := twrp_sm8850\n' > "$fixture/upstream/twrp_sm8850.mk"
+          printf 'kernel-fixture\n' > "$fixture/upstream/prebuilt/kernel"
+          test ! -d "$fixture/checkout/device/xiaomi"
+          bash scripts/stage-public-sm8850-tree.sh \
+            "$fixture/upstream" "$fixture/checkout/device/xiaomi/sm8850"
+          test -d "$fixture/checkout/device/xiaomi/sm8850"
+          cmp "$fixture/upstream/prebuilt/kernel" \
+              "$fixture/checkout/device/xiaomi/sm8850/prebuilt/kernel"
+          # Refusal to overwrite an existing device tree is also mandatory.
+          if bash scripts/stage-public-sm8850-tree.sh \
+            "$fixture/upstream" "$fixture/checkout/device/xiaomi/sm8850"; then
+            echo "::error::Stage script incorrectly overwrote an existing tree"
+            exit 1
+          fi
+          echo "PASS: actual source-tree stage onto a fresh, nonexistent device/xiaomi parent."
           python3 - <<'PY'
           from pathlib import Path
           sync = Path("scripts/songyuan-twrp16-full-source-sync.sh").read_text()
@@ -44,8 +67,11 @@ jobs:
           assert 'CHECKPOINT: lunch PASS' in build
           assert 'BUILD-HEARTBEAT' in build
           assert 'oom_kill' in build
-          assert 'cp -a "$RUNNER_TEMP/public-sm8850-tree" "$TREE"' in build
+          assert 'scripts/stage-public-sm8850-tree.sh' in build
           assert 'No Songyuan private OEM' in build or 'no Songyuan OEM' in build
+          stage = Path("scripts/stage-public-sm8850-tree.sh").read_text()
+          assert 'mkdir -p -- "$(dirname "$dest")"' in stage
+          assert 'cp -a -- "$from" "$dest"' in stage
           assert 'm recoveryimage' not in build.lower()
           assert not any(s in build for s in ('m recovery -j','make recoveryimage','/songyuan-id305-curated'))
           assert 'build-requests/public-sm8850-compile.txt' in wf
