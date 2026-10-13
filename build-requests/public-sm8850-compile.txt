@@ -1,6 +1,7 @@
-PUBLIC ONLY — explicit post-static-audit generic YuKongA SM8850 TWRP16 binary build request.
-Triggered after the quick CI static audits PASS; only upstream PUBLIC TWRP16 and YuKongA code permitted.
-Command: source build/envsetup.sh; lunch twrp_sm8850; m recovery
-No -j, no m recoveryimage, no Songyuan OEM private, no stock recovery modification, no phone.
-Reason for run: preceding full source sync was 392/392, but an externally reported runner shutdown signal 143 interrupted Soong bootstrap before compilation completed. New logs collect RAM/oom/disk and envsetup/lunch checkpoints.
-Request tag: audit-2026-10-13-post-run-38392955562
+PUBLIC ONLY — second explicitly approved generic YuKongA SM8850 TWRP16 m recovery build, post-regression-test.
+Previous run 38400919072 failed because a bare cp to device/xiaomi/sm8850 had no parent directory, after 392/392 sync.
+NOW: isolated guarded staging helper creates missing parents and checks identical copied files. Real empty-hierarchy fixture regression PASS (38419419972), updated full static audit PASS (38419507764).
+Run precheck clones and stages real public YuKongA source before expensive 74G TWRP16 sync; any staging error must fail early.
+Command exactly: source build/envsetup.sh; lunch twrp_sm8850; m recovery.
+NO -j, NO m recoveryimage, NO Songyuan private OEM/assets, NO stock recovery changes, NO phone access.
+Request tag: 2026-10-13-stage-parent-verified-second-audit
