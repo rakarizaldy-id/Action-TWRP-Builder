@@ -1,4 +1,4 @@
-name: Songyuan TWRP 16 - Public Clang Source Probe (NO OEM / NO BUILD)
+name: Songyuan TWRP16 public source probe
 
 on:
   push:
@@ -9,115 +9,28 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: songyuan-public-clang-probe-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  clang-source-probe:
-    if: github.ref == 'refs/heads/twrp16-songyuan-source-probe'
-    name: Official TWRP16 Clang checkout on public runner
+  clang_probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
-    env:
-      TARGET_PROJECT: prebuilts/clang/host/linux-x86
-      SRC_DIR: ${{ github.workspace }}/twrp
-      PROBE_LOGS: ${{ runner.temp }}/songyuan-clang-probe
     steps:
-      - name: Resource fingerprint BEFORE any cleanup
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "::notice::SOURCE-ONLY; NEVER fetch private Songyuan OEM, release assets, or keys"
-          nproc
-          free -h
-          df -hT / "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
-          lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
+      - name: Checkout public fork only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
-      - name: Pinned public-runner cleanup (same tested revision as OFRP)
+      - name: Reclaim public runner disk
         uses: rokibhasansagar/slimhub_actions@c2a6e4317d3de2b623ac7395b05e9d2149e8289b
 
-      - name: Install minimal source-sync tooling
+      - name: Probe official TWRP16 Clang project only
         shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates python3
-          mkdir -p "$RUNNER_TEMP/bin" "$PROBE_LOGS" "$SRC_DIR"
-          curl -fsSL --retry 3 https://storage.googleapis.com/git-repo-downloads/repo -o "$RUNNER_TEMP/bin/repo"
-          chmod 0755 "$RUNNER_TEMP/bin/repo"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-          df -hT "$SRC_DIR"
+        run: bash scripts/songyuan-twrp16-clang-probe.sh
 
-      - name: Initialize OFFICIAL TWRP-Test twrp-16.0 manifest (source only)
-        working-directory: twrp
-        shell: bash
-        run: |
-          set -euo pipefail
-          repo init -u https://github.com/TWRP-Test/platform_manifest_twrp_aosp -b twrp-16.0 \
-            --depth=1 --partial-clone --clone-filter=blob:none > "$PROBE_LOGS/init.log" 2>&1 || {
-              tail -n 100 "$PROBE_LOGS/init.log" || true
-              exit 1
-            }
-          repo manifest -o "$PROBE_LOGS/effective-manifest.xml"
-          python3 - "$PROBE_LOGS/effective-manifest.xml" "$TARGET_PROJECT" <<'PY'
-          import sys
-          import xml.etree.ElementTree as ET
-          root = ET.parse(sys.argv[1]).getroot()
-          paths = {x.get("path") or x.get("name") for x in root.findall("project")}
-          print("Effective official TWRP 16 project count:", len(paths))
-          if len(paths) < 300 or sys.argv[2] not in paths:
-              raise SystemExit("Invalid or unexpected manifest / missing Clang path")
-          PY
-          df -hT "$SRC_DIR"
-
-      - name: Checkout exactly the Build 6 blocker with time and disk watchdogs
-        working-directory: twrp
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Checkout target: $TARGET_PROJECT" | tee "$PROBE_LOGS/target.txt"
-          echo "NOTE: no source lock, OEM, device tree staging, compile or recovery artifact"
-          # The private Build #6 stopped on this project after a 600s timeout.
-          # Public probe allows 2400s, but enforces a minimum 25 GiB free throughout.
-          minimum_kib=26214400
-          started="$SECONDS"
-          setsid timeout --signal=TERM --kill-after=30s 2400s \
-            repo sync -v -c -j1 --no-clone-bundle --no-tags --fail-fast \
-            "$TARGET_PROJECT" > "$PROBE_LOGS/clang-sync.log" 2>&1 &
-          sync_pid=$!
-          stopped_for_disk=0
-          while kill -0 "$sync_pid" 2>/dev/null; do
-            sleep 10
-            free_kib="$(df -Pk "$SRC_DIR" | awk 'END{print $4}')"
-            if (( free_kib < minimum_kib )); then
-              echo "::error::Free disk below 25 GiB; cancelling isolated Clang checkout"
-              kill -TERM -- "-$sync_pid" 2>/dev/null || true
-              stopped_for_disk=1
-              break
-            fi
-          done
-          rc=0
-          wait "$sync_pid" || rc=$?
-          if (( stopped_for_disk )); then rc=99; fi
-          {
-            printf 'target=%s\nexit_code=%s\nelapsed_seconds=%s\n' "$TARGET_PROJECT" "$rc" "$((SECONDS-started))"
-            df -hT "$SRC_DIR"
-            du -sh "$SRC_DIR/$TARGET_PROJECT" "$SRC_DIR/.repo" 2>/dev/null || true
-          } | tee "$PROBE_LOGS/final-status.txt"
-          if (( rc != 0 )); then
-            tail -n 100 "$PROBE_LOGS/clang-sync.log" || true
-            exit "$rc"
-          fi
-          git -C "$SRC_DIR/$TARGET_PROJECT" rev-parse --verify HEAD | tee -a "$PROBE_LOGS/final-status.txt"
-          echo "### Public TWRP16 Clang source-only checkout: SUCCESS" >> "$GITHUB_STEP_SUMMARY"
-          cat "$PROBE_LOGS/final-status.txt" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload SOURCE-ONLY diagnostics (never OEM or recovery)
+      - name: Upload public source diagnostics only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: public-twrp16-clang-source-diagnostics-${{ github.run_id }}
+          name: twrp16-source-clang-${{ github.run_id }}
           path: ${{ runner.temp }}/songyuan-clang-probe/
           if-no-files-found: warn
           retention-days: 3
