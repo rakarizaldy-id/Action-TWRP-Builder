@@ -27,9 +27,13 @@ if [[ -e "$TREE" ]]; then
   echo "::error::Unexpected device tree already present; refuse overwrite"
   exit 30
 fi
-git clone --depth=1 --single-branch --branch twrp-16.0 \
-  https://github.com/YuKongA/twrp_device_xiaomi_sm8850.git \
-  "$TREE" > "$LOGS/public-device-tree-clone.log" 2>&1
+# Public tree was cloned and inspected BEFORE the 74G sync.
+# Reuse that exact source instead of cloning/checking unknown files late.
+test -s "$RUNNER_TEMP/public-sm8850-tree/prebuilt/kernel" || {
+  echo "::error::Public YuKongA preflight tree missing"
+  exit 31
+}
+cp -a "$RUNNER_TEMP/public-sm8850-tree" "$TREE"
 git -C "$TREE" rev-parse HEAD | tee "$LOGS/public-device-tree-SHA.txt"
 df -hT "$SRC" | tee "$LOGS/before-build-disk.txt"
 
