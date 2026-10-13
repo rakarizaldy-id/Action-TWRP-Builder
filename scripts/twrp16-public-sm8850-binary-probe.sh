@@ -10,6 +10,13 @@ OUT="$RUNNER_TEMP/twrp16-sm8850-public-binary-out"
 MIN_FREE_KIB=15728640  # 15 GiB watchdog during compilation
 mkdir -p "$LOGS" "$OUT"
 echo "Compile experiment: PUBLIC YuKongA twrp_sm8850, m recovery, no Songyuan OEM/stock/image."
+echo "Required build diagnostic tools:"
+for tool in bash git python3 readelf awk timeout setsid df; do
+  command -v "$tool" || { echo "::error::Missing required tool: $tool"; exit 10; }
+done
+echo "Memory at build start:"
+free -h
+cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.events 2>/dev/null || true
 test -f "$SRC/build/envsetup.sh"
 test -d "$SRC/vendor/twrp"
 test ! -e "$SRC/device/xiaomi/songyuan"
@@ -30,22 +37,42 @@ df -hT "$SRC" | tee "$LOGS/before-build-disk.txt"
 # No -j override, following the user's explicit build target instructions.
 started="$SECONDS"
 setsid timeout --signal=TERM --kill-after=40s 14400s \
-  bash -c 'set -eo pipefail; source build/envsetup.sh; export ALLOW_MISSING_DEPENDENCIES=true; lunch twrp_sm8850; m recovery' \
-  > "$LOGS/m-recovery-build.log" 2>&1 &
+  bash -c '
+    set -eo pipefail
+    test -s build/envsetup.sh
+    echo "CHECKPOINT: AOSP envsetup begin"
+    source build/envsetup.sh
+    echo "CHECKPOINT: AOSP envsetup PASS"
+    export ALLOW_MISSING_DEPENDENCIES=true
+    echo "CHECKPOINT: lunch twrp_sm8850 begin"
+    lunch twrp_sm8850
+    echo "CHECKPOINT: lunch PASS; TARGET_PRODUCT=${TARGET_PRODUCT:-unset}"
+    test "${TARGET_PRODUCT:-}" = twrp_sm8850
+    echo "CHECKPOINT: m recovery begin (no -j, no image)"
+    m recovery
+    echo "CHECKPOINT: m recovery PASS"
+  ' > "$LOGS/m-recovery-build.log" 2>&1 &
 pid="$!"
 checks=0
 disk_stop=0
 rc=0
-printf 'epoch\telapsed_seconds\tfree_kib\n' > "$LOGS/disk-heartbeat.tsv"
+printf 'epoch\telapsed_seconds\tfree_kib\tmem_available_kib\tswap_free_kib\tcgroup_oom_kill\n' > "$LOGS/disk-heartbeat.tsv"
 while kill -0 "$pid" 2>/dev/null; do
   sleep 20
   checks=$((checks+1))
   free_kib="$(df -Pk "$SRC" | awk 'END {print $4}')"
-  printf '%s\t%s\t%s\n' "$(date +%s)" "$((SECONDS-started))" "$free_kib" \
+  mem_avail_kib="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+  swap_free_kib="$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)"
+  cgroup_oom_kill="$(awk '/^oom_kill / {print $2}' /sys/fs/cgroup/memory.events 2>/dev/null || printf 0)"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$((SECONDS-started))" \
+    "$free_kib" "$mem_avail_kib" "$swap_free_kib" "$cgroup_oom_kill" \
     >> "$LOGS/disk-heartbeat.tsv"
   if (( checks%3==0 )); then
-    echo "PUBLIC SM8850 m recovery: elapsed=$((SECONDS-started))s; free_kib=$free_kib"
-    tail -n 3 "$LOGS/m-recovery-build.log" || true
+    echo "BUILD-HEARTBEAT: elapsed=$((SECONDS-started))s free_kib=$free_kib mem_avail_kib=$mem_avail_kib swap_free_kib=$swap_free_kib oom_kill=$cgroup_oom_kill"
+    echo "BUILD-HEARTBEAT: last 12 compile log lines:"
+    tail -n 12 "$LOGS/m-recovery-build.log" || true
+    echo "BUILD-HEARTBEAT: cgroup memory and CPU pressure:"
+    cat /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.max /proc/pressure/memory 2>/dev/null || true
   fi
   if (( free_kib < MIN_FREE_KIB )); then
     echo "::error::Low disk during m recovery; stopped before crossing 15 GiB free."
