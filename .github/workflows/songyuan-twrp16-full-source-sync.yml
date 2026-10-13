@@ -1,0 +1,43 @@
+name: Songyuan TWRP16 full official source sync (no build)
+
+on:
+  push:
+    branches:
+      - twrp16-songyuan-source-probe
+    paths:
+      - .github/workflows/songyuan-twrp16-full-source-sync.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: twrp16-source-only-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full_official_source_sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 358
+    steps:
+      - name: Checkout public fork only (no credentials retained)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Reclaim public runner disk
+        uses: rokibhasansagar/slimhub_actions@c2a6e4317d3de2b623ac7395b05e9d2149e8289b
+
+      - name: Sync 392 official TWRP16 source projects only
+        shell: bash
+        run: bash scripts/songyuan-twrp16-full-source-sync.sh
+
+      - name: Upload public source-only sync diagnostics and SHA source lock
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: twrp16-full-source-only-${{ github.run_id }}
+          path: ${{ runner.temp }}/songyuan-full-source-sync/
+          if-no-files-found: warn
+          retention-days: 3
+          compression-level: 6
