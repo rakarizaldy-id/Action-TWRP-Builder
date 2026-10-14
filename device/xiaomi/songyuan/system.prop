@@ -1,0 +1,11 @@
+# POCO F9 Ultra Android16, Songyuan / canoe; source-only properties.
+ro.boot.dynamic_partitions=true
+ro.product.device=songyuan
+ro.product.name=songyuan
+ro.product.model=POCO F9 Ultra
+ro.product.brand=POCO
+ro.product.manufacturer=Xiaomi
+ro.board.platform=canoe
+ro.sf.lcd_density=480
+ro.charger.enable_suspend=1
+vendor.usb.configfs=1
