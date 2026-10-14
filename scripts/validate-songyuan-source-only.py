@@ -28,7 +28,7 @@ for variable in ('BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE',
                  'BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT',
                  'BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT',
                  'BOARD_VENDOR_RAMDISK_FRAGMENTS'):
-    if re.search(r'^\\s*' + re.escape(variable) + r'\\s*(?:[:+?]?=)', board, re.M):
+    if re.search(r'^\s*' + re.escape(variable) + r'\s*(?:[:+?]?=)', board, re.M):
         raise SystemExit(f'FAIL ELF-only: image-specific BoardConfig variable {variable}')
 assert 'TARGET_PREBUILT_KERNEL' not in board, 'Public target must not reference absent private kernel'
 assert 'TARGET_PREBUILT_DTB' not in board, 'Public target must not reference absent private dtb'
