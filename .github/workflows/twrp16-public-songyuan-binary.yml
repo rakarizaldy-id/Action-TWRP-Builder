@@ -1,5 +1,10 @@
 name: TWRP16 POCO F9 Ultra SONGYUAN source-only binary (public, no OEM)
 on:
+  push:
+    branches:
+      - twrp16-songyuan-source-probe
+    paths:
+      - build-requests/public-songyuan-compile.txt
   workflow_dispatch:
 permissions:
   contents: read
