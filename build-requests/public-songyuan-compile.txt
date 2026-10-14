@@ -1,0 +1,3 @@
+Request #1: native POCO F9 Ultra songyuan TWRP16 m recovery binary-only GitHub Actions build.
+Device source-only ID305 configs only, no proprietary OEM files, no image building/repack.
+Requested from current chat on 2026-10-14.
