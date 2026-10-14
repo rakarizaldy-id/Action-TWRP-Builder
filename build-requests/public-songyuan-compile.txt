@@ -1,3 +1,7 @@
-Request #1: native POCO F9 Ultra songyuan TWRP16 m recovery binary-only GitHub Actions build.
-Device source-only ID305 configs only, no proprietary OEM files, no image building/repack.
-Requested from current chat on 2026-10-14.
+Request #2: FULL PUBLIC SONGYUAN TWRP16 BINARY-ONLY REBUILD
+Date: 2026-10-14 (user confirmed "gas")
+Branch: twrp16-songyuan-source-probe
+Target: lunch twrp_songyuan; m recovery
+Use comprehensive BoardConfig, pre-sync negative regression tests, build logging and runtime closure audit now on branch.
+Do NOT sync private Songyuan OEM blobs, do NOT build or repack recovery.img, and do NOT flash a device.
+Prior Run #38568569017 failed during lunch on image-only BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE option; source 392/392, disk and swap passed.
