@@ -1,0 +1,38 @@
+name: Songyuan TWRP16 source-only comprehensive static preflight (NO Android sync)
+on:
+  push:
+    branches:
+      - twrp16-songyuan-source-probe
+    paths:
+      - device/xiaomi/songyuan/**
+      - scripts/*songyuan*
+      - .github/workflows/twrp16-public-songyuan-binary.yml
+      - .github/workflows/twrp16-songyuan-static-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit_songyuan_source_only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout PUBLIC sources, no credentials retained
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify no private OEM and exact native TWRP16 target
+        run: |
+          set -euo pipefail
+          test ! -e boot.img && test ! -e recovery.img && test ! -e .songyuan-oem
+          test -s device/xiaomi/songyuan/twrp_songyuan.mk
+          ! grep -Eq '^[[:space:]]*BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE[[:space:]]*[:?+]?=' device/xiaomi/songyuan/BoardConfig.mk
+          python3 -m py_compile scripts/validate-songyuan-source-only.py scripts/test-songyuan-preflight.py scripts/audit-songyuan-runtime.py
+          bash -n scripts/build-songyuan-binary.sh
+          bash -n scripts/songyuan-twrp16-full-source-sync.sh
+          python3 scripts/validate-songyuan-source-only.py device/xiaomi/songyuan
+          python3 scripts/test-songyuan-preflight.py device/xiaomi/songyuan
+          if git ls-files device/xiaomi/songyuan | grep -Ei '\.(img|ko|dtbo|dtb|mbn|bin|so)$'; then
+            echo "::error::Binary OEM material found in public Songyuan tree"; exit 21
+          fi
+          echo "PASS static native Songyuan TWRP16: no OEM, bad-flags rejected, scripts syntactically valid"
+          echo "NOT tested: lunch, m recovery, ABI, HAL, decrypt, stock repack"
