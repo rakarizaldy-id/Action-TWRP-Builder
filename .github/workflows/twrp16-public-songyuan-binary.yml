@@ -1,0 +1,70 @@
+name: TWRP16 POCO F9 Ultra SONGYUAN source-only binary (public, no OEM)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: twrp16-songyuan-source-only-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compile_public_songyuan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - name: Checkout public Songyuan tree and scripts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reclaim unused public runner disk
+        uses: rokibhasansagar/slimhub_actions@c2a6e4317d3de2b623ac7395b05e9d2149e8289b
+      - name: Install Android build tools and preflight Songyuan
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates python3 bc bison flex gperf zip unzip rsync libxml2-utils libssl-dev liblz4-tool zstd build-essential lz4 cpio
+          bash -n scripts/build-songyuan-binary.sh
+          python3 scripts/validate-songyuan-source-only.py device/xiaomi/songyuan
+          test ! -e boot.img && test ! -e recovery.img && test ! -e .songyuan-oem
+          df -hT "$GITHUB_WORKSPACE"
+          total=$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $2}')
+          free=$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $4}')
+          if (( total < 131072000 || free < 99614720 )); then
+            echo "::error::Runner too small for proven complete TWRP16 source (need >=125GiB total, >=95GiB free)"
+            exit 40
+          fi
+      - name: Sync 392 official public TWRP16 projects (same successful recipe)
+        run: bash scripts/songyuan-twrp16-full-source-sync.sh
+      - name: Set 30 GB swap
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+        with:
+          swap-size-gb: 30
+      - name: Verify swap and disk for build
+        run: |
+          set -euo pipefail
+          total=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)
+          free=$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $4}')
+          if (( total < 26214400 || free < 25165824 )); then
+            echo '::error::Not enough 30GiB swap/24GiB disk for build'
+            exit 41
+          fi
+      - name: Compile real twrp_songyuan recovery ELF and collect public runtime
+        run: bash scripts/build-songyuan-binary.sh
+      - name: Save Songyuan build logs on success or failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: twrp16-songyuan-source-only-logs-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/songyuan-full-source-sync/
+            ${{ runner.temp }}/songyuan-public-build-logs/
+          if-no-files-found: warn
+          retention-days: 3
+      - name: Save binary and runtime data only (no recovery.img)
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TWRP16-SONGYUAN-SOURCE-ONLY-NOT-FLASHABLE-${{ github.run_id }}
+          path: ${{ runner.temp }}/songyuan-public-binary-output/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 1
