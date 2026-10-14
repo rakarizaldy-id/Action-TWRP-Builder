@@ -28,7 +28,11 @@ jobs:
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates python3 bc bison flex gperf zip unzip rsync libxml2-utils libssl-dev liblz4-tool zstd build-essential lz4 cpio
           bash -n scripts/build-songyuan-binary.sh
+          python3 -m py_compile scripts/validate-songyuan-source-only.py scripts/test-songyuan-preflight.py scripts/audit-songyuan-runtime.py
           python3 scripts/validate-songyuan-source-only.py device/xiaomi/songyuan
+          python3 scripts/test-songyuan-preflight.py device/xiaomi/songyuan
+          # Image-only flags must fail before cloning the 392-project source.
+          ! grep -Eq '^[[:space:]]*BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE[[:space:]]*[:?+]?=' device/xiaomi/songyuan/BoardConfig.mk
           test ! -e boot.img && test ! -e recovery.img && test ! -e .songyuan-oem
           df -hT "$GITHUB_WORKSPACE"
           total=$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $2}')
@@ -52,7 +56,7 @@ jobs:
             echo '::error::Not enough 30GiB swap/24GiB disk for build'
             exit 41
           fi
-      - name: Compile real twrp_songyuan recovery ELF and collect public runtime
+      - name: Compile real twrp_songyuan ELF with bounded logs and runtime closure audit
         run: bash scripts/build-songyuan-binary.sh
       - name: Save Songyuan build logs on success or failure
         if: always()
