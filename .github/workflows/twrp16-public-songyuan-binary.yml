@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - twrp16-songyuan-source-probe
+      - songyuan-stage8-module-loader-review-20261015
     paths:
       - build-requests/public-songyuan-compile.txt
   workflow_dispatch:
@@ -67,7 +68,7 @@ jobs:
             ${{ runner.temp }}/songyuan-full-source-sync/
             ${{ runner.temp }}/songyuan-public-build-logs/
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 30
       - name: Save binary and runtime data only (no recovery.img)
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -75,5 +76,5 @@ jobs:
           name: TWRP16-SONGYUAN-SOURCE-ONLY-NOT-FLASHABLE-${{ github.run_id }}
           path: ${{ runner.temp }}/songyuan-public-binary-output/
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 30
           compression-level: 1
