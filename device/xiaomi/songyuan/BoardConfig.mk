@@ -90,3 +90,14 @@ TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
 TW_CUSTOM_CPU_TEMP_PATH := "/sys/class/thermal/thermal_zone75/temp"
 # Stock kernel module names and secure HAL binaries remain in PRIVATE data.
 # Runtime injection into stock carrier is deferred to THIS CHAT.
+
+# STAGE8 REVIEW BRANCH ONLY: the successful source-only ELF compile omitted
+# TW_LOAD_VENDOR_MODULES; in TWRP-Test twrp-16.0 this excludes the module loader.
+# These 69 requested module filenames are copied from verified private Songyuan
+# BoardConfig, each present in the 73-module ID305 OEM inventory. No OEM binaries
+# are part of this PUBLIC repository or its build outputs.
+# Do NOT merge/boot this alone: upstream kernel_module_loader.cpp sets
+# twrp.modules.loaded=true after an attempt even if modules failed to load.
+# Keep Songyuan hardware/security RC gated by a separate observed-ready property.
+TW_LOAD_VENDOR_MODULES := "qmi_helpers.ko qcom_glink.ko qcom_glink_smem.ko qcom_smd.ko rproc_qcom_common.ko qcom_pdr_msg.ko pdr_interface.ko qcom_sysmon.ko qcom_q6v5.ko qcom_ramdump.ko qcom_va_minidump.ko qcom_pil_info.ko qcom_q6v5_pas.ko q6_pdr_dlkm.ko q6_notifier_dlkm.ko snd_event_dlkm.ko gpr_dlkm.ko spf_core_dlkm.ko adsp_loader_dlkm.ko q6_dlkm.ko pcie-pdc.ko pci-msm-drv.ko mhi.ko wcd_usbss_i2c.ko usb_f_gsi.ko dwc3-msm.ko repeater.ko redriver.ko ipam.ko gsim.ko rmnet_mem.ko smem-mailbox.ko cfg80211.ko mac80211.ko wlan_firmware_service.ko cnss_prealloc.ko cnss_utils.ko cnss_nl.ko cnss_plat_ipc_qmi_svc.ko cnss2.ko qca_cld3_peach_v2.ko qca_cld3_wcn7750.ko qti_pmic_glink.ko qti_battery_charger.ko panel_event_notifier.ko gh_irq_lend.ko xiaomi_touch.ko focaltech_touch_3685g_1.ko swr_dlkm.ko mca_sysfs.ko mca_event.ko mca_log.ko mca_parse_dts.ko mca_charge_mievent.ko mca_protocol_class.ko mca_protocol_qc_class.ko mca_platform_bc12_class.ko mca_platform_buckchg_class.ko mca_strategy_class.ko mca_adsp_glink.ko mca_qcom_subpmic_proxy.ko leds-qcom-flash.ko leds-qpnp-vibrator-ldo.ko qcom-hv-haptics.ko swr_haptics_dlkm.ko smcinvoke_dlkm.ko qsee_ipc_irq_bridge.ko stm_st54se_gpio.ko stm_nfc_i2c.ko"
+TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
