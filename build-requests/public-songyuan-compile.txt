@@ -5,3 +5,11 @@ Target: lunch twrp_songyuan; m recovery
 Use comprehensive BoardConfig, pre-sync negative regression tests, build logging and runtime closure audit now on branch.
 Do NOT sync private Songyuan OEM blobs, do NOT build or repack recovery.img, and do NOT flash a device.
 Prior Run #38568569017 failed during lunch on image-only BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE option; source 392/392, disk and swap passed.
+
+Request #3: STAGE8 SOURCE-ONLY TWRP16 ELF REBUILD
+Date: 2026-10-15
+Branch: songyuan-stage8-module-loader-review-20261015
+Reason: actual prior successful compiled binary omitted TW_LOAD_VENDOR_MODULES despite private device tree defining it; review branch now requests exact 69 verified ID305 module names and TWRP-Test module loader implementation.
+Output: ARM64 TWRP recovery executable ELF and PUBLIC runtime files ONLY, no OEM, no recovery.img, no flash.
+Preserve source build constants PLATFORM_VERSION 99.87.36 and PLATFORM_SECURITY_PATCH 2099-12-31.
+Review-only: upstream twrp.modules.loaded property is NOT observed hardware readiness; Stage8 Chat-Linux patch independently gates twrp.songyuan.modules.ready after checking /sys/module.
