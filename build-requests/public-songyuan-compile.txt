@@ -5,3 +5,12 @@ Target: lunch twrp_songyuan; m recovery
 Use comprehensive BoardConfig, pre-sync negative regression tests, build logging and runtime closure audit now on branch.
 Do NOT sync private Songyuan OEM blobs, do NOT build or repack recovery.img, and do NOT flash a device.
 Prior Run #38568569017 failed during lunch on image-only BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE option; source 392/392, disk and swap passed.
+
+Request #3: STAGE8 MODULE-LOADER PUBLIC ELF-ONLY REBUILD
+Date: 2026-10-15
+Branch: twrp16-songyuan-source-probe
+Input source: verified 69 OEM module filenames configured in device/xiaomi/songyuan/BoardConfig.mk; PUBLIC source-only target, zero OEM blob bytes.
+Build: use same successful m recovery workflow to compile TWRP16 ELF and runtime assets.
+No recovery.img, no OEM source inclusion, no PC-side build, no flashing.
+Build identity pins must remain PLATFORM_VERSION=99.87.36, PLATFORM_SECURITY_PATCH=2099-12-31.
+Postprocessing of an ELF and fail-closed Songyuan readiness gate happens in ChatGPT Linux only; built-in twrp.modules.loaded is NOT security readiness.
