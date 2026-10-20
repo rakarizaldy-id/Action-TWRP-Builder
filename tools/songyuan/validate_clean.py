@@ -43,6 +43,7 @@ assert "TW_LOAD_PREBUILT_MODULES_AT_FIRST := true" in board
 for name in ("vendor", "odm", "vendor_dlkm"):
     assert f"$(DEVICE_PATH)/prebuilt/{name}" in device
 assert (root / "prebuilt/kernel").stat().st_size == 42097152
+assert (root / "recovery/root/odm/bin/hw/vendor.xiaomi.hardware.vibratorfeature.service").stat().st_mode & 0o111, "native vibrator HAL must be executable"
 
 mounts = set()
 for line in fstab.splitlines():
