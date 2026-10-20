@@ -30,6 +30,11 @@ assert "BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true" in board
 assert "BOARD_RECOVERYIMAGE_PARTITION_SIZE := 104857600" in board
 assert "TW_INCLUDE_CRYPTO_FBE := true" in board
 assert "TW_INCLUDE_FBE_METADATA_DECRYPT := true" in board
+# Owner excludes Wi-Fi even though the Ekin feature reference implements it.
+# TWRP 16 checks TW_INCLUDE_WIFI; false must remain the sole assignment.
+wifi_settings = [line.strip() for line in board.splitlines()
+                 if line.strip().startswith("TW_INCLUDE_WIFI") and ":=" in line]
+assert wifi_settings == ["TW_INCLUDE_WIFI := false"], wifi_settings
 assert "$(DEVICE_PATH)/twrp.flags:recovery/root/system/etc/twrp.flags" in device
 assert "find-copy-subdir-files" not in device
 assert "SONGYUAN_SELECTED_OEM_FILES" in device
@@ -71,7 +76,17 @@ for service, (binpath, rc) in services.items():
     if binpath.startswith(("/vendor/", "/odm/")):
         rel = binpath.lstrip("/")
         assert (root / "recovery/root" / rel).is_file() or (root / "prebuilt" / rel).is_file(), service
-assert not (root / "recovery/root/init.recovery.wifi.rc").exists()
+# Fail closed if Wi-Fi daemon, driver, script, VINTF or init is added to ramdisk.
+# Native OEM archive may still contain unused WLAN modules; those are not installed.
+recovery_root = root / "recovery/root"
+for entry in recovery_root.rglob("*"):
+    if entry.is_file():
+        name = entry.name.lower()
+        assert not any(term in name for term in ("wifi", "wlan", "wpa_supplicant", "cnss", "qca_cld")), entry
+for name in ("TW_LOAD_VENDOR_MODULES", "SONGYUAN_MODULE_CLOSURE"):
+    selection = board if name == "TW_LOAD_VENDOR_MODULES" else device
+    for term in ("qca_cld", "cnss2.ko", "cfg80211.ko", "wlan_firmware_service"):
+        assert term not in selection, (name, term)
 if len(sys.argv) == 3:
     assert (root / "prebuilt/vendor/bin/qseecomd").is_file()
     assert (root / "prebuilt/odm/bin/hw/android.hardware.weaver-service.thales").is_file()
