@@ -1,0 +1,108 @@
+diff --git a/Android.mk b/Android.mk
+index 2576d8f..6801f99 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -429,6 +429,17 @@ ifneq ($(TW_CUSTOM_BATTERY_PATH),)
+     TW_USE_LEGACY_BATTERY_SERVICES := true
+     LOCAL_CFLAGS += -DTW_CUSTOM_BATTERY_PATH=$(TW_CUSTOM_BATTERY_PATH)
+ endif
++ifneq ($(TW_CUSTOM_BATTERY_CAPACITY_PATH),)
++    TW_USE_LEGACY_BATTERY_SERVICES := true
++    LOCAL_CFLAGS += -DTW_USE_LEGACY_BATTERY_SERVICES -DTW_CUSTOM_BATTERY_CAPACITY_PATH=$(TW_CUSTOM_BATTERY_CAPACITY_PATH)
++endif
++ifneq ($(TW_CUSTOM_BATTERY_ONLINE_PATH),)
++    TW_USE_LEGACY_BATTERY_SERVICES := true
++    LOCAL_CFLAGS += -DTW_CUSTOM_BATTERY_ONLINE_PATH=$(TW_CUSTOM_BATTERY_ONLINE_PATH)
++endif
++ifneq ($(TW_CUSTOM_BATTERY_SECONDARY_ONLINE_PATH),)
++    LOCAL_CFLAGS += -DTW_CUSTOM_BATTERY_SECONDARY_ONLINE_PATH=$(TW_CUSTOM_BATTERY_SECONDARY_ONLINE_PATH)
++endif
+ ifneq ($(TW_CUSTOM_CPU_TEMP_PATH),)
+ 	LOCAL_CFLAGS += -DTW_CUSTOM_CPU_TEMP_PATH=$(TW_CUSTOM_CPU_TEMP_PATH)
+ endif
+diff --git a/partition.cpp b/partition.cpp
+index 69f7cb4..4d1feea 100755
+--- a/partition.cpp
++++ b/partition.cpp
+@@ -3217,7 +3217,10 @@ bool TWPartition::Find_Wildcard_Block_Devices(const string& Device) {
+ 		sprintf(buffer, "%s %s-%i auto defaults defaults", item.c_str(), Mount_Point.c_str(), ++mount_point_index);
+ 		part->Process_Fstab_Line(buffer, false, NULL);
+ 		char display[MAX_FSTAB_LINE_LENGTH];
+-		sprintf(display, "%s %i", Storage_Name.c_str(), mount_point_index);
++		if (mount_point_index == 1)
++			snprintf(display, sizeof(display), "%s", Storage_Name.c_str());
++		else
++			snprintf(display, sizeof(display), "%s %i", Storage_Name.c_str(), mount_point_index);
+ 		part->Storage_Name = display;
+ 		part->Display_Name = display;
+ 		part->Primary_Block_Device = item;
+diff --git a/partitionmanager.cpp b/partitionmanager.cpp
+index c07981f..726de58 100755
+--- a/partitionmanager.cpp
++++ b/partitionmanager.cpp
+@@ -2613,7 +2613,7 @@ void TWPartitionManager::Get_Partition_List(string ListType, std::vector<Partitio
+ 		char free_space[255];
+ 		string Current_Storage = DataManager::GetCurrentStoragePath();
+ 		for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
+-			if ((*iter)->Is_Storage) {
++			if ((*iter)->Is_Storage && (*iter)->Is_Present) {
+ 				struct PartitionList part;
+ 				sprintf(free_space, "%llu", (*iter)->Free / 1024 / 1024);
+ 				part.Display_Name = (*iter)->Storage_Name + " (";
+diff --git a/twrp.cpp b/twrp.cpp
+index e028a10..5358e5d 100644
+--- a/twrp.cpp
++++ b/twrp.cpp
+@@ -433,7 +433,10 @@ int main(int argc, char **argv) {
+ 		while (true) {
+ #ifdef TW_USE_LEGACY_BATTERY_SERVICES
+ 			char cap_s[4];
+-#ifdef TW_CUSTOM_BATTERY_PATH
++#ifdef TW_CUSTOM_BATTERY_CAPACITY_PATH
++			string capacity_file = EXPAND(TW_CUSTOM_BATTERY_CAPACITY_PATH);
++			FILE * cap = fopen(capacity_file.c_str(),"rt");
++#elif defined(TW_CUSTOM_BATTERY_PATH)
+ 			string capacity_file = EXPAND(TW_CUSTOM_BATTERY_PATH);
+ 			capacity_file += "/capacity";
+ 			FILE * cap = fopen(capacity_file.c_str(),"rt");
+@@ -447,4 +450,23 @@ int main(int argc, char **argv) {
+ 				if (lastVal < 0)	lastVal = 0;
+ 			}
+-#ifdef TW_CUSTOM_BATTERY_PATH
++#ifdef TW_CUSTOM_BATTERY_ONLINE_PATH
++			string online_file = EXPAND(TW_CUSTOM_BATTERY_ONLINE_PATH);
++			cap = fopen(online_file.c_str(),"rt");
++			bool online = false;
++			if (cap) {
++				fgets(cap_s, 2, cap);
++				fclose(cap);
++				online = cap_s[0] == '1';
++			}
++#ifdef TW_CUSTOM_BATTERY_SECONDARY_ONLINE_PATH
++			string secondary_online_file = EXPAND(TW_CUSTOM_BATTERY_SECONDARY_ONLINE_PATH);
++			cap = fopen(secondary_online_file.c_str(),"rt");
++			if (cap) {
++				fgets(cap_s, 2, cap);
++				fclose(cap);
++				online = online || cap_s[0] == '1';
++			}
++#endif
++			charging = online ? '+' : ' ';
++#elif defined(TW_CUSTOM_BATTERY_PATH)
+ 			string status_file = EXPAND(TW_CUSTOM_BATTERY_PATH);
+@@ -460,6 +482,7 @@ int main(int argc, char **argv) {
+ #else
+ 			cap = fopen("/sys/class/power_supply/battery/status","rt");
+ #endif
++#ifndef TW_CUSTOM_BATTERY_ONLINE_PATH
+ 			if (cap) {
+ 				fgets(cap_s, 2, cap);
+ 				fclose(cap);
+@@ -469,6 +492,7 @@ int main(int argc, char **argv) {
+ 				else
+ 					charging = ' ';
+ 			}
++#endif
+ #else
+ 			auto battery_info = GetBatteryInfo();
+ 			if (battery_info.charging) {

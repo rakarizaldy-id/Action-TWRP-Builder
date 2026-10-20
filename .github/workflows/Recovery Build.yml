@@ -1,176 +1,110 @@
-name: Recovery Build
-
+name: songyuan
 on:
   workflow_dispatch:
-    inputs:
-      MANIFEST_URL:
-        description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
-        required: true
-        default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
-      MANIFEST_BRANCH:
-        description: 'MANIFEST_BRANCH'
-        required: true
-        default: 'twrp-12.1'
-      DEVICE_TREE_URL:
-        description: 'DEVICE_TREE_URL'
-        required: true
-        default: 'https://github.com/TeamWin/android_device_asus_I003D'
-      DEVICE_TREE_BRANCH:
-        description: 'DEVICE_TREE_BRANCH'
-        required: true
-        default: 'android-12.1'
-      DEVICE_PATH:
-        description: 'DEVICE_PATH'
-        required: true
-        default: 'device/asus/I003D'
-      COMMON_TREE_URL:
-        description: 'COMMON_TREE_URL (if no common tree, leave blank)'
-        required: false
-      COMMON_PATH:
-        description: 'COMMON_PATH (if no common tree, leave blank)'
-        required: false
-      DEVICE_NAME:
-        description: 'DEVICE_NAME'
-        required: true
-        default: 'I003D'
-      MAKEFILE_NAME:
-        description: 'MAKEFILE_NAME'
-        required: true
-        default: 'twrp_I003D'
-      BUILD_TARGET:
-        description: 'BUILD_TARGET'
-        required: true
-        default: 'recovery'
-
+permissions:
+  contents: read
+concurrency:
+  group: songyuan-build
+  cancel-in-progress: true
 jobs:
   build:
-    if: github.event.repository.owner.id == github.event.sender.id
+    if: github.actor == 'rakarizaldy-id' && github.ref == 'refs/heads/songyuan'
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
+    timeout-minutes: 330
+    env:
+      TWRP_DIR: ${{ github.workspace }}/twrp
+      OEM_DIR: ${{ github.workspace }}/project/prebuilt
+      LOGS: ${{ github.workspace }}/songyuan-source
+      SONGYUAN_DT_ROOT: ${{ github.workspace }}/project
     steps:
-    - name: Display Run Parameters
-      run: |
-        echo "::group::User Environment Variables"
-        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
-        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
-        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
-        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
-        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
-        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
-        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
-        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
-        echo "::endgroup::"
-
-    # You might want to Checkout your repo first, but not mandatory
-    - name: Check Out
-      uses: actions/checkout@v4
-
-    # Cleanup The Actions Workspace Using Custom Composite Run Actions
-    - name: Cleanup
-      uses: rokibhasansagar/slimhub_actions@main
-      # That's it! Now use your normal steps
-
-    - name: Prepare the environment
-      run: |
-        sudo apt update && sudo apt upgrade -y
-        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
-            linux-modules-extra-$(uname -r) \
-            gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib \
-            libc6-dev lib32ncurses-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils \
-            xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses-dev libsdl1.2-dev \
-            build-essential libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop pngcrush schedtool squashfs-tools \
-            imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses6 python3 tar
-
-    - name: Install OpenJDK
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '11'
-
-    - name: Setup SSH Keys
-      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') || 
-          startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
-          startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-          ssh-private-key: |
-            ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Install repo
-      run: |
-        mkdir ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
-
-    - name: Initialize repo
-      run: |
-        mkdir workspace
-        cd workspace
-        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
-        git config --global user.name "Nico170420"
-        git config --global user.email "b170420nc@gmail.com"
-        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-      id: pwd
-
-    - name: Repo Sync
-      run: |
-        repo sync -j$(nproc --all) --force-sync
-      working-directory: workspace
-
-    - name: Clone device tree
-      run: |
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
-    - name: Clone common tree
-      if: |
-        github.event.inputs.COMMON_TREE_URL != null
-        && github.event.inputs.COMMON_PATH != null
-      run: |
-        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
-    - name: Check Build Tree
-      uses: haya14busa/action-cond@v1
-      id: buildtree
-      with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
-        if_true: twrp
-        if_false: omni
-
-    - name: Sync Device Dependencies
-      run: |
-        bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ github.event.inputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
-        repo sync -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
-
-    - name: Set Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 12
-
-    - name: Building recovery
-      run: |
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: | 
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
-        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
-        tag_name: ${{ github.run_id }}
-        body: |
-          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: ${{ github.event.inputs.DEVICE_NAME }}
-          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: rakarizaldy-id/android_device_xiaomi_songyuan-recovery
+          ref: 0e951e4feb536699f27444fec06cd2236dcf3d52
+          path: project
+          persist-credentials: false
+      - name: Verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C project rev-parse HEAD)" = "0e951e4feb536699f27444fec06cd2236dcf3d52"
+          test "${RUNNER_ENVIRONMENT:-}" = github-hosted
+          test "$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $2}')" -ge 131072000
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/share/powershell /usr/local/.ghcup /opt/ghc /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get clean
+          test "$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $4}')" -ge 99614720
+          python3 tools/songyuan/verify_oem.py "$OEM_DIR"
+          python3 tools/songyuan/check_id305_module_graph.py --board project/BoardConfig.mk --curated "$OEM_DIR"
+          python3 tools/songyuan/validate_clean.py project
+          python3 tools/songyuan/audit_recovery_copy_map.py project
+          bash -n tools/songyuan/compact_twrp16_ci.sh
+          bash -n tools/songyuan/probe_clang_sparse.sh
+          bash -n tools/songyuan/apply_recovery_patches.sh
+          bash -n tools/songyuan/prepare.sh
+      - name: Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends repo git curl ca-certificates python3 python3-pip gh lz4 cpio bc bison flex gperf zip unzip rsync libxml2-utils libssl-dev liblz4-tool zstd build-essential binutils
+      - name: Source
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/songyuan/compact_twrp16_ci.sh "$TWRP_DIR" "$LOGS"
+          python3 tools/songyuan/verify_oem.py "$OEM_DIR"
+      - name: Stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch="$GITHUB_WORKSPACE/tools/songyuan/patches/crypto.patch"
+          git -C "$TWRP_DIR/system/vold" apply --check "$patch"
+          git -C "$TWRP_DIR/system/vold" apply "$patch"
+          bash tools/songyuan/apply_recovery_patches.sh "$TWRP_DIR"
+          bash tools/songyuan/prepare.sh "$TWRP_DIR" "$OEM_DIR" "$SONGYUAN_DT_ROOT"
+          python3 tools/songyuan/validate_clean.py "$TWRP_DIR/device/xiaomi/songyuan" --staged
+      - name: Compile
+        shell: bash
+        run: |
+          set -eo pipefail
+          cd "$TWRP_DIR"
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch twrp_songyuan-bp2a-eng
+          test "$TARGET_PRODUCT" = twrp_songyuan
+          m -j2 recovery servicemanager.recovery libsongyuan_memset_compat
+          m -j2 sepolicy.recovery init.recovery.mksh.rc
+          m -j2 relink_libraries relink_binaries
+      - name: Verify ELF
+        shell: bash
+        run: |
+          set -euo pipefail
+          product="$TWRP_DIR/out/target/product/songyuan"
+          root="$product/recovery/root"
+          out="$RUNNER_TEMP/songyuan-checked"
+          mkdir -p "$out/paired-runtime"
+          python3 tools/songyuan/ensure_recovery_preload.py "$root"
+          source=""
+          for p in "$root/system/bin/recovery" "$root/sbin/recovery" "$product/obj/EXECUTABLES/recovery_intermediates/recovery"; do
+            if [[ -s "$p" ]] && readelf -h "$p" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
+              source="$p"
+              break
+            fi
+          done
+          test -n "$source"
+          cp "$source" "$out/recovery"
+          for p in system/bin/servicemanager system/lib64/libbinder.so system/lib64/libbinder_ndk.so; do
+            test -s "$root/$p"
+            mkdir -p "$out/paired-runtime/$(dirname "$p")"
+            cp -L "$root/$p" "$out/paired-runtime/$p"
+          done
+          python3 tools/songyuan/audit_compiled_runtime.py "$out" "$root"
+          python3 tools/songyuan/export_native_runtime_closure.py "$out" "$root"
+          python3 tools/songyuan/check_minui_preload_closure.py "$root"
+          python3 tools/songyuan/export_native_boot_contract.py "$out" "$root"
+          python3 tools/songyuan/check_recovery_property_contexts.py "$root" "$out"
+          sha256sum "$out/recovery"
+          echo "ELF checks complete"
