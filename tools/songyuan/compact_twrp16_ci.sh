@@ -41,6 +41,17 @@ p=[x.get('path') or x.get('name') for x in root.findall('project')]
 required=['build/make','build/soong','bootable/recovery','system/vold','vendor/twrp']
 if len(p)!=391 or len(set(p))!=391 or 'prebuilts/clang/host/linux-x86' in p or any(x not in p for x in required):
     raise SystemExit(f'FAIL-CLOSED: expected 391 actual upstream projects excluding pinned Clang; got {len(p)}; required missing={[x for x in required if x not in p]}')
+expected_source_pins={
+  'bootable/recovery':'0315dbb53c47a0532546b7056f6af71b4dc0ddab',
+  'system/vold':'4c83041ec61f9b482085685f1e6aed5a62f103aa',
+  'external/se_omapi':'4d1e09a8b18dc3e2bec644e50401e28ea695f3d1',
+}
+revisions={x.get('path') or x.get('name'): x.get('revision') for x in root.findall('project')}
+bad={path: revisions.get(path) for path, rev in expected_source_pins.items()
+     if revisions.get(path) != rev}
+if bad:
+    raise SystemExit(f'FAIL-CLOSED: audited TWRP16 source pin drift before 391-project sync: {bad}')
+print('PASS: 3 upstream source commits locked before expensive TWRP16 sync')
 print('PASS: upstream 391 projects with intact AOSP/TWRP16 required paths')
 PY
 GCC_ROOT='prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8'
