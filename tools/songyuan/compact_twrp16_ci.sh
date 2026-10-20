@@ -21,6 +21,10 @@ cat > .repo/local_manifests/songyuan-standalone-clang.xml <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest>
   <remove-project name="platform/prebuilts/clang/host/linux-x86" />
+  <!-- Source patches and OMAPI contracts are audited against these exact upstream revisions. -->
+  <extend-project name="android_bootable_recovery" path="bootable/recovery" revision="0315dbb53c47a0532546b7056f6af71b4dc0ddab" />
+  <extend-project name="android_system_vold" path="system/vold" revision="4c83041ec61f9b482085685f1e6aed5a62f103aa" />
+  <extend-project name="android_se_omapi" path="external/se_omapi" revision="4d1e09a8b18dc3e2bec644e50401e28ea695f3d1" />
 </manifest>
 XML
 test -f .repo/manifests/README.md
