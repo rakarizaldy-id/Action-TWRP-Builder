@@ -23,14 +23,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: rakarizaldy-id/android_device_xiaomi_songyuan-recovery
-          ref: 0e951e4feb536699f27444fec06cd2236dcf3d52
+          ref: 0244ac649ec21993378846d3bc902bda3f310fb9
           path: project
           persist-credentials: false
       - name: Verify
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C project rev-parse HEAD)" = "0e951e4feb536699f27444fec06cd2236dcf3d52"
+          test "$(git -C project rev-parse HEAD)" = "0244ac649ec21993378846d3bc902bda3f310fb9"
           test "${RUNNER_ENVIRONMENT:-}" = github-hosted
           test "$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $2}')" -ge 131072000
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/share/powershell /usr/local/.ghcup /opt/ghc /usr/share/swift /opt/hostedtoolcache
