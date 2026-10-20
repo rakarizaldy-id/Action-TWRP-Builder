@@ -118,7 +118,7 @@ for name, length, expected in ta_entries:
     if not ta_file.is_file() or ta_file.is_symlink():
         sys.exit("BLOCKED: native Songyuan TA missing " + name)
     data = ta_file.read_bytes()
-    git_blob_sha = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    git_blob_sha = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
     if len(data) != int(length) or git_blob_sha != expected:
         sys.exit("BLOCKED: original Songyuan TA changed " + name)
 
