@@ -32,6 +32,28 @@ if len(files) != len(set(files)):
 if not set(files) <= set(entries):
     sys.exit("BLOCKED: selected native file missing from genuine archive")
 
+supplement_file = dt / "SONGYUAN_SUPPLEMENTAL_OEM_SHA256.json"
+supplement_files = {}
+extra_services = set()
+if supplement_file.is_file():
+    supplemental = json.loads(supplement_file.read_text())
+    if supplemental.get("device") != "songyuan" or supplemental.get("source_firmware") != "OS3.0.305.0.WGNIDXM":
+        sys.exit("BLOCKED: wrong supplemental native OEM provenance")
+    supplement_files = supplemental.get("files", {})
+    if not isinstance(supplement_files, dict) or len(supplement_files) != 29:
+        sys.exit("BLOCKED: expected exactly 29 native supplemental OEM entries")
+    extra_services = {"odm/bin/hw/vendor.xiaomi.hardware.vibratorfeature.service"}
+    for name, info in supplement_files.items():
+        if (name.startswith("/") or ".." in Path(name).parts
+                or not name.startswith(("vendor/", "odm/"))
+                or not isinstance(info, dict)):
+            sys.exit("BLOCKED: invalid supplemental OEM path")
+        item = dt / "recovery/root" / name
+        if not item.is_file() or item.is_symlink() or item.stat().st_size != info.get("bytes"):
+            sys.exit("BLOCKED: supplemental OEM file missing/size mismatch " + name)
+        if hashlib.sha256(item.read_bytes()).hexdigest() != info.get("sha256"):
+            sys.exit("BLOCKED: supplemental OEM hash mismatch " + name)
+
 services = set(groups["SONGYUAN_NATIVE_SERVICES"])
 rc_services = set()
 root = dt / "recovery/root"
@@ -42,7 +64,7 @@ for rc in root.rglob("*.rc"):
             path = tokens[2].lstrip("/")
             if path.startswith(("vendor/bin/", "odm/bin/")):
                 rc_services.add(path)
-if services != rc_services:
+if services | extra_services != rc_services:
     sys.exit("BLOCKED: native executable allowlist differs from recovery init services")
 
 # Original DT_NEEDED inventory; no one may assert this proves dlopen, ABI or runtime.
@@ -82,6 +104,8 @@ root_rel = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file
 selected_root = set(make_words(source, "SONGYUAN_RECOVERY_FILE_PATHS"))
 if root_rel != selected_root:
     sys.exit("BLOCKED: TWRP source files are not explicitly allowlisted")
+if not set(supplement_files) <= selected_root:
+    sys.exit("BLOCKED: original Songyuan extra files not installed in recovery")
 if not {"odm/firmware/focaltech_ts_fw_songyuan.bin",
         "vendor/etc/ssg/ta_config.json"} <= set(files):
     sys.exit("BLOCKED: native security or touch source omitted")
