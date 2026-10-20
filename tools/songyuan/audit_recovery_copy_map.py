@@ -33,6 +33,8 @@ if not set(files) <= set(entries):
     sys.exit("BLOCKED: selected native file missing from genuine archive")
 
 supplement_file = dt / "SONGYUAN_SUPPLEMENTAL_OEM_SHA256.json"
+if not supplement_file.is_file():
+    sys.exit("BLOCKED: Songyuan supplemental OEM SHA256 manifest missing")
 supplement_files = {}
 extra_services = set()
 if supplement_file.is_file():
@@ -99,6 +101,26 @@ if "recovery/root/vendor/lib/modules/1.1/$(module)" not in source:
     sys.exit("BLOCKED: selected module destination differs from TWRP loader priority")
 if "recovery/root/vendor/lib/modules/1.1/modules.dep" not in source:
     sys.exit("BLOCKED: no original modules.dep with selected subset")
+
+# Signed Songyuan modem TA fragments must match original byte-exact git blobs.
+# This guards the 20 OTA fragments independently of the 162 curated OEM entries.
+import re
+ta_source = dt / "SONGYUAN_TA_PROVENANCE.md"
+if not ta_source.is_file():
+    sys.exit("BLOCKED: original modem TA provenance absent")
+ta_entries = re.findall(
+    r"\| `([0-9A-Fa-f-]+\.(?:b0[0-8]|mdt))` \| (\d+) \| `([a-f0-9]{40})` \|",
+    ta_source.read_text())
+if len(ta_entries) != 20 or len({name for name, _, _ in ta_entries}) != 20:
+    sys.exit("BLOCKED: original Songyuan 20-TA provenance inventory drifted")
+for name, length, expected in ta_entries:
+    ta_file = root / "system/bin/twrp_secure_element_ta" / name
+    if not ta_file.is_file() or ta_file.is_symlink():
+        sys.exit("BLOCKED: native Songyuan TA missing " + name)
+    data = ta_file.read_bytes()
+    git_blob_sha = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    if len(data) != int(length) or git_blob_sha != expected:
+        sys.exit("BLOCKED: original Songyuan TA changed " + name)
 
 root_rel = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
 selected_root = set(make_words(source, "SONGYUAN_RECOVERY_FILE_PATHS"))
