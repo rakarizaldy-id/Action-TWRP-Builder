@@ -54,6 +54,19 @@ if bad:
 print('PASS: 3 upstream source commits locked before expensive TWRP16 sync')
 print('PASS: upstream 391 projects with intact AOSP/TWRP16 required paths')
 PY
+# Source sync previously stopped on the upstream Bazel common checkout.
+# Preflight that exact project serially BEFORE the expensive Clang/full sync.
+BAZEL_COMMON='prebuilts/bazel/common'
+echo 'Preflight original upstream Bazel common worktree serially'
+if ! timeout --signal=TERM --kill-after=40s 1200s repo sync -v -c -j1 \
+  --jobs-network=1 --jobs-checkout=1 --retry-fetches=3 \
+  --no-clone-bundle --no-tags --fail-fast "$BAZEL_COMMON" > "$LOGS/bazel-common-sync.log" 2>&1; then
+  echo '::error::Bazel common source checkout failed before Clang/full source download'
+  tail -n 120 "$LOGS/bazel-common-sync.log" || true
+  exit 26
+fi
+test "$(git -C "$TOP/$BAZEL_COMMON" rev-parse --is-inside-work-tree)" = true
+echo 'PASS: original Bazel common source checked out serially'
 GCC_ROOT='prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8'
 echo 'Probing original Android16 GCC/glibc worktree before any expensive full sync'
 if ! timeout --signal=TERM --kill-after=40s 1200s repo sync -v -c -j1 \
@@ -92,7 +105,7 @@ fi
 printf '%s\t%s\n' "$CLANG" "$SHA" > "$LOGS/standalone-clang-revision.tsv"
 df -hT "$TOP" | tee "$LOGS/after-clang-disk.txt"
 echo "start 391-project upstream source sync with 15GiB disk watchdog"
-setsid timeout --signal=TERM --kill-after=40s 15000s repo sync -v -c -j2 --retry-fetches=3 --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync.log" 2>&1 &
+setsid timeout --signal=TERM --kill-after=40s 15000s repo sync -v -c -j2 --jobs-network=2 --jobs-checkout=1 --retry-fetches=3 --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync.log" 2>&1 &
 pid=$!
 killed=0
 while kill -0 "$pid" 2>/dev/null; do
@@ -110,6 +123,24 @@ done
 rc=0
 wait "$pid" || rc=$?
 if (( killed )); then rc=99; fi
+# One bounded serial recovery if original checkout init failed, never for a
+# disk-watchdog kill. Keep all 391 original source projects and exact pins.
+if (( rc != 0 && rc != 99 )) && grep -Fq 'Cannot initialize work tree' "$LOGS/repo-sync.log"; then
+  free_kib="$(df -Pk "$TOP" | awk 'END {print $4}')"
+  if (( free_kib >= 31457280 )); then
+    echo '::warning::Retry original source checkout ONCE in serial mode'
+    if timeout --signal=TERM --kill-after=40s 3600s repo sync -v -c -j1 \
+      --jobs-network=1 --jobs-checkout=1 --retry-fetches=3 \
+      --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync-serial-retry.log" 2>&1; then
+      echo 'PASS: 391 original upstream source projects recovered in serial mode'
+      rc=0
+    else
+      rc=1
+      echo '::error::Serial source sync recovery also failed'
+      tail -n 120 "$LOGS/repo-sync-serial-retry.log" || true
+    fi
+  fi
+fi
 df -hT "$TOP" | tee "$LOGS/after-repo-sync-disk.txt"
 if (( rc != 0 )); then
   echo "::error::391-source Repo sync failed (exit=$rc)"
@@ -139,7 +170,7 @@ for i in sorted(chosen):
     text = re.sub(r'(?i)(https?://)[^/@\s]+:[^/@\s]+@', r'\1[REDACTED]@', text)
     print(f'  L{i+1}: {text[:600]}')
 PY
-  tail -40 "$LOGS/repo-sync.log" || true
+  tail -120 "$LOGS/repo-sync.log" || true
   exit 31
 fi
 repo manifest -r -o "$LOGS/resolved-391-projects.xml"
