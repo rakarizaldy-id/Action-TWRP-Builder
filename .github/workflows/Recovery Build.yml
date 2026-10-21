@@ -66,18 +66,37 @@ jobs:
           bash tools/songyuan/apply_recovery_patches.sh "$TWRP_DIR"
           bash tools/songyuan/prepare.sh "$TWRP_DIR" "$OEM_DIR" "$SONGYUAN_DT_ROOT"
           python3 tools/songyuan/validate_clean.py "$TWRP_DIR/device/xiaomi/songyuan" --staged
-      - name: Compile
+      - name: Compile complete pre-image recovery tree
         shell: bash
         run: |
           set -eo pipefail
           cd "$TWRP_DIR"
           source build/envsetup.sh
           export ALLOW_MISSING_DEPENDENCIES=true
+          export SKIP_ABI_CHECKS=true
           lunch twrp_songyuan-bp2a-eng
           test "$TARGET_PRODUCT" = twrp_songyuan
-          m -j2 recovery servicemanager.recovery libsongyuan_memset_compat
-          m -j2 sepolicy.recovery init.recovery.mksh.rc
-          m -j2 relink_libraries relink_binaries
+
+          # The *actual* TWRP16 build/make recoveryimage graph has:
+          #   ramdisk_files-timestamp -> recovery ramdisk CPIO -> compressed ramdisk
+          #   -> mkbootimg recovery.img. Build its first target, not an invented
+          # list of ELF/Soong targets. That stages the complete recovery root
+          # and all source-declared dependencies but makes NO image on GitHub.
+          makefile=build/make/core/Makefile
+          grep -Fq 'INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP := $(call intermediates-dir-for,PACKAGING,recovery)/ramdisk_files-timestamp' "$makefile"
+          grep -Fq '$(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP): $(MKBOOTFS)' "$makefile"
+          grep -Fq '$(recovery_uncompressed_ramdisk): $(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP)' "$makefile"
+          grep -Fq '$(recovery_ramdisk): $(recovery_uncompressed_ramdisk)' "$makefile"
+          grep -Fq '$(INSTALLED_RECOVERYIMAGE_TARGET): $(recoveryimage-deps)' "$makefile"
+          product=out/target/product/songyuan
+          preimage="$product/obj/PACKAGING/recovery_intermediates/ramdisk_files-timestamp"
+          m -j2 "$preimage"
+          test -f "$preimage"
+          test -s "$product/recovery/root/system/bin/recovery"
+          test ! -e "$product/recovery.img"
+          test ! -e "$product/ramdisk-recovery.img"
+          test ! -e "$product/ramdisk-recovery.cpio"
+          echo "PASS: original recoveryimage dependency graph built up to recovery root; no image created"
       - name: Verify ELF
         shell: bash
         run: |
