@@ -64,7 +64,9 @@ for rc in root.rglob("*.rc"):
         tokens = line.split()
         if len(tokens) >= 3 and tokens[0] == "service":
             path = tokens[2].lstrip("/")
-            if path.startswith(("vendor/bin/", "odm/bin/")):
+            # These are ELF service binaries. prepdecrypt.sh is a recovery
+            # script service, not an OEM native binary from the selected archive.
+            if path.startswith(("vendor/bin/", "odm/bin/")) and not path.endswith(".sh"):
                 rc_services.add(path)
 if services | extra_services != rc_services:
     sys.exit("BLOCKED: native executable allowlist differs from recovery init services")
