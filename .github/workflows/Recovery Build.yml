@@ -66,6 +66,25 @@ jobs:
           bash tools/songyuan/apply_recovery_patches.sh "$TWRP_DIR"
           bash tools/songyuan/prepare.sh "$TWRP_DIR" "$OEM_DIR" "$SONGYUAN_DT_ROOT"
           python3 tools/songyuan/validate_clean.py "$TWRP_DIR/device/xiaomi/songyuan" --staged
+      - name: Provision proven Songyuan build swap
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The successful ID305 ELF runs on 17-18 Oct 2026 allocated 6 GiB
+          # extra swap after sync/staging, with at least 24 GiB disk free.
+          free_kib="$(df -Pk "$RUNNER_TEMP" | awk 'END {print $4}')"
+          echo "Pre-Soong free disk: $((free_kib / 1048576)) GiB"
+          test "$free_kib" -ge 25165824
+          swap="$RUNNER_TEMP/songyuan-swapfile"
+          test ! -e "$swap"
+          sudo fallocate -l 6G "$swap"
+          sudo chmod 600 "$swap"
+          sudo mkswap "$swap"
+          sudo swapon "$swap"
+          swapon --show
+          swapon --show=NAME --noheadings | grep -Fxq "$swap"
+          free -h
+          df -h "$GITHUB_WORKSPACE"
       - name: Compile complete pre-image recovery tree
         shell: bash
         run: |
@@ -90,6 +109,23 @@ jobs:
           grep -Fq '$(INSTALLED_RECOVERYIMAGE_TARGET): $(recoveryimage-deps)' "$makefile"
           product=out/target/product/songyuan
           preimage="$product/obj/PACKAGING/recovery_intermediates/ramdisk_files-timestamp"
+
+          # Emit live diagnostics; a runner shutdown otherwise erases its
+          # temporary files. Record RAM/swap, disk and cgroup OOM counters.
+          (
+            while :; do
+              printf 'SONGYUAN_RESOURCE ts=%s ' "$(date -u +%FT%TZ)"
+              free -m | awk '/^Mem:/ {printf "mem_avail_mib=%s ", $7} /^Swap:/ {printf "swap_used_mib=%s swap_free_mib=%s ", $3, $4}'
+              printf 'disk_free_gib=%s ' "$(df -Pk "$GITHUB_WORKSPACE" | awk 'END {printf "%.1f", $4/1048576}')"
+              if [[ -r /sys/fs/cgroup/memory.events ]]; then
+                awk '/^(oom|oom_kill) / {printf "cgroup_%s=%s ", $1, $2}' /sys/fs/cgroup/memory.events
+              fi
+              echo
+              sleep 30
+            done
+          ) &
+          resource_monitor_pid=$!
+          trap 'kill "$resource_monitor_pid" 2>/dev/null || true' EXIT
           m -j2 "$preimage"
           test -f "$preimage"
           test -s "$product/recovery/root/system/bin/recovery"
