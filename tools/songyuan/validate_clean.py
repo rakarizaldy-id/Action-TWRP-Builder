@@ -10,6 +10,7 @@ required = (
     "BoardConfig.mk", "device.mk", "twrp_songyuan.mk",
     "recovery.fstab", "twrp.flags", "prebuilt/kernel",
     "prebuilt/curated-manifest.json", "recovery/root/init.recovery.qcom.rc",
+    "usb/init.recovery.usb.rc",
     "recovery/root/system/bin/songyuan-touch-init.sh",
     "recovery/root/system/bin/songyuan-security-setup.sh",
     "recovery/root/system/bin/songyuan-weaver-start.sh",
@@ -35,14 +36,16 @@ assert "TW_INCLUDE_FBE_METADATA_DECRYPT := true" in board
 wifi_settings = [line.strip() for line in board.splitlines()
                  if line.strip().startswith("TW_INCLUDE_WIFI") and ":=" in line]
 assert wifi_settings == ["TW_INCLUDE_WIFI := false"], wifi_settings
-# Ekin's per-device USB rc strategy is retained for original Songyuan,
-# never install the TWRP legacy USB rc to the same location. The actual
-# TWRP16 producer is guarded by TW_EXCLUDE_DEFAULT_USB_INIT.
+# Native Songyuan USB configfs bytes are installed ONLY by upstream
+# prebuilt_root Soong, without a competing PRODUCT_COPY_FILES or overlay.
 usb_selectors = [line.strip() for line in board.splitlines()
                  if line.strip().startswith("TW_EXCLUDE_DEFAULT_USB_INIT") and ":=" in line]
-assert usb_selectors == ["TW_EXCLUDE_DEFAULT_USB_INIT := true"], usb_selectors
-assert "    init.recovery.usb.rc \\" in device
-assert (root / "recovery/root/init.recovery.usb.rc").is_file()
+assert usb_selectors == ["TW_EXCLUDE_DEFAULT_USB_INIT := false"], usb_selectors
+assert "    init.recovery.usb.rc \\" not in device
+assert (root / "usb/init.recovery.usb.rc").is_file()
+assert not (root / "recovery/root/init.recovery.usb.rc").exists()
+assert "TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab" in board
+assert "$(DEVICE_PATH)/recovery.fstab:recovery/root/system/etc/recovery.fstab" not in device
 
 # Inventory all native destination paths, not merely the one USB collision.
 # PRODUCT_COPY_FILES has five curated native groups; duplicate targets in
@@ -71,15 +74,15 @@ native_paths += ["vendor/lib/modules/1.1/modules.dep", "system/etc/recovery.fsta
                  "system/etc/twrp.flags"]
 assert len(native_paths) == len(set(native_paths)), "Duplicate native recovery install destinations"
 # TWRP upstream etc/Android.bp installs these root prebuilts. All except
-# USB have no same-name native destination. USB ownership is explicitly
-# handed to the Songyuan configfs rc by the audited selector above.
+# USB have no same-name native destination. All must be distinct
+# from native Make destinations.
 twrp_root_producers = {
     "init.recovery.usb.rc", "init.recovery.ldconfig.rc",
     "init.recovery.logd.rc", "init.recovery.mksh.rc",
     "vendor_hwservice_contexts", "plat_hwservice_contexts",
     "vndservice_contexts",
 }
-assert set(native_paths) & twrp_root_producers == {"init.recovery.usb.rc"}, (
+assert not (set(native_paths) & twrp_root_producers), (
     set(native_paths) & twrp_root_producers
 )
 assert "$(DEVICE_PATH)/twrp.flags:recovery/root/system/etc/twrp.flags" in device

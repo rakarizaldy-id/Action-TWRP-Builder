@@ -23,14 +23,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: rakarizaldy-id/android_device_xiaomi_songyuan-recovery
-          ref: ad245022848bc77d5aa7f1b8be5ac7b0c5334ae2
+          ref: ee0530fb30648a9a1c7b6f569d92ceb72b4d43b1
           path: project
           persist-credentials: false
       - name: Verify
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C project rev-parse HEAD)" = "ad245022848bc77d5aa7f1b8be5ac7b0c5334ae2"
+          test "$(git -C project rev-parse HEAD)" = "ee0530fb30648a9a1c7b6f569d92ceb72b4d43b1"
           test "${RUNNER_ENVIRONMENT:-}" = github-hosted
           test "$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $2}')" -ge 131072000
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/share/powershell /usr/local/.ghcup /opt/ghc /usr/share/swift /opt/hostedtoolcache
@@ -67,17 +67,10 @@ jobs:
           bash tools/songyuan/prepare.sh "$TWRP_DIR" "$OEM_DIR" "$SONGYUAN_DT_ROOT"
           python3 tools/songyuan/validate_clean.py "$TWRP_DIR/device/xiaomi/songyuan" --staged
 
-          # Authoritative ownership guard against the previously observed
-          # Make/Soong duplicate init.recovery.usb.rc producer. Keep Ekin's
-          # per-device configfs pattern with original Songyuan USB content.
-          bp="$TWRP_DIR/bootable/recovery/Android.bp"
-          etc="$TWRP_DIR/bootable/recovery/etc/Android.bp"
-          soong="$TWRP_DIR/vendor/twrp/config/BoardConfigSoong.mk"
-          grep -Fq 'name: "init.recovery.usb.rc"' "$etc"
-          grep -Fq 'exclude_default_usb_init' "$bp"
-          grep -Fq '$(call soong_config_set_bool, twrpGlobalVars, exclude_default_usb_init, $(call twrp_scalar,$(TW_EXCLUDE_DEFAULT_USB_INIT)))' "$soong"
-          grep -Fxq 'TW_EXCLUDE_DEFAULT_USB_INIT := true' "$TWRP_DIR/device/xiaomi/songyuan/BoardConfig.mk"
-          echo 'PASS: one native Songyuan USB recovery rc owner; generic TWRP USB producer disabled'
+          # Static ownership review: native Make destinations, Soong input,
+          # recovery overlay, VINTF/fstab paths and source graph contracts.
+          python3 tools/songyuan/audit_recovery_copy_map.py "$TWRP_DIR/device/xiaomi/songyuan"
+          python3 tools/songyuan/verify_recovery_install_owners.py "$TWRP_DIR" "$TWRP_DIR/device/xiaomi/songyuan"
       - name: Provision proven Songyuan build swap
         shell: bash
         run: |
@@ -138,9 +131,16 @@ jobs:
           ) &
           resource_monitor_pid=$!
           trap 'kill "$resource_monitor_pid" 2>/dev/null || true' EXIT
+          # Graph-only preflight: complete Soong + Kati graph, no Ninja compile.
+          # Catch ALL install-output conflicts before expensive compilation.
+          m --skip-ninja "$preimage"
+          test -s out/soong/installs-twrp_songyuan.mk
+          echo 'PASS: complete native Soong/Make graph accepts the install map'
           m -j2 "$preimage"
           test -f "$preimage"
           test -s "$product/recovery/root/system/bin/recovery"
+          cmp -s "$product/recovery/root/init.recovery.usb.rc" "$TWRP_DIR/device/xiaomi/songyuan/usb/init.recovery.usb.rc"
+          cmp -s "$product/recovery/root/system/etc/recovery.fstab" "$TWRP_DIR/device/xiaomi/songyuan/recovery.fstab"
           test ! -e "$product/recovery.img"
           test ! -e "$product/ramdisk-recovery.img"
           test ! -e "$product/ramdisk-recovery.cpio"

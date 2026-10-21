@@ -21,6 +21,15 @@ if len(entries) != 162 or manifest["source_firmware"] != "OS3.0.305.0.WGNIDXM":
 
 source = (dt / "device.mk").read_text()
 board = dt / "BoardConfig.mk"
+usb_source = dt / "usb/init.recovery.usb.rc"
+if (not usb_source.is_file() or usb_source.is_symlink()
+        or (dt / "recovery/root/init.recovery.usb.rc").exists()
+        or "init.recovery.usb.rc" in source):
+    sys.exit("BLOCKED: USB RC must be installed only from staged Soong source")
+if "TW_EXCLUDE_DEFAULT_USB_INIT := false" not in board.read_text():
+    sys.exit("BLOCKED: Soong native USB RC required dependency not enabled")
+if "$(DEVICE_PATH)/recovery.fstab:recovery/root/system/etc/recovery.fstab" in source:
+    sys.exit("BLOCKED: Makefile already installs native recovery.fstab")
 if "find-copy-subdir-files" in source:
     sys.exit("BLOCKED: implicit bulk copy of OEM files reintroduced")
 names = ("SONGYUAN_NATIVE_SERVICES", "SONGYUAN_NATIVE_LIBRARIES",
@@ -141,7 +150,7 @@ def add(rel: str, source_name: str) -> None:
     mapping[rel] = source_name
 for path in sorted(selected_root):
     add("recovery/root/" + path, "recovery/root/" + path)
-for path in ("system/etc/recovery.fstab", "system/etc/twrp.flags"):
+for path in ("system/etc/twrp.flags",):
     add("recovery/root/" + path, path)
 for path in files:
     add("recovery/root/" + path, "prebuilt/" + path)
