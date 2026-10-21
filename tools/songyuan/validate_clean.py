@@ -40,8 +40,13 @@ assert "find-copy-subdir-files" not in device
 assert "SONGYUAN_SELECTED_OEM_FILES" in device
 assert "recovery/root/vendor/lib/modules/1.1" in device
 assert "TW_LOAD_PREBUILT_MODULES_AT_FIRST := true" in board
-for name in ("vendor", "odm", "vendor_dlkm"):
-    assert f"$(DEVICE_PATH)/prebuilt/{name}" in device
+# device.mk deliberately selects OEM files through one explicit $(rel) mapping.
+# A literal prebuilt/vendor or prebuilt/odm substring is NOT required in Make.
+assert "$(DEVICE_PATH)/prebuilt/$(rel):recovery/root/$(rel)" in device
+for group in ("SONGYUAN_NATIVE_SERVICES", "SONGYUAN_NATIVE_LIBRARIES",
+              "SONGYUAN_NATIVE_CONFIG"):
+    assert device.count(group + " :=") == 1, group
+assert "$(DEVICE_PATH)/prebuilt/vendor_dlkm/lib/modules/$(module):recovery/root/vendor/lib/modules/1.1/$(module)" in device
 assert (root / "prebuilt/kernel").stat().st_size == 42097152
 assert (root / "recovery/root/odm/bin/hw/vendor.xiaomi.hardware.vibratorfeature.service").stat().st_mode & 0o111, "native vibrator HAL must be executable"
 
