@@ -50,6 +50,7 @@ jobs:
           bash -n tools/songyuan/probe_clang_sparse.sh
           bash -n tools/songyuan/apply_recovery_patches.sh
           bash -n tools/songyuan/prepare.sh
+          python3 tools/songyuan/check_ci_envsetup_contract.py ".github/workflows/Recovery Build.yml"
       - name: Dependencies
         shell: bash
         run: |
@@ -99,7 +100,9 @@ jobs:
       - name: Audit complete Soong and Make graph without Android compilation
         shell: bash
         run: |
-          set -euo pipefail
+          # TWRP16 envsetup.sh evaluates optional unset variables (e.g. TOP).
+          # It cannot be sourced under bash nounset; match the compiled path.
+          set -eo pipefail
           cd "$TWRP_DIR"
           source build/envsetup.sh
           export ALLOW_MISSING_DEPENDENCIES=true
