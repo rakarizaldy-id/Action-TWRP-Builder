@@ -2,7 +2,7 @@ name: songyuan
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: songyuan-build
   cancel-in-progress: true
@@ -127,3 +127,36 @@ jobs:
           python3 tools/songyuan/check_recovery_property_contexts.py "$root" "$out"
           sha256sum "$out/recovery"
           echo "ELF checks complete"
+      - name: Publish verified ELF release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/songyuan"
+          test "${GITHUB_ACTOR}" = "rakarizaldy-id"
+          out="$RUNNER_TEMP/songyuan-checked"
+          product="$TWRP_DIR/out/target/product/songyuan"
+          root="$product/recovery/root"
+          test -s "$out/recovery"
+          test -d "$root"
+          readelf -h "$out/recovery" | grep -q 'Machine:.*AArch64'
+          test ! -e "$product/recovery.img"
+          test ! -e "$product/ramdisk-recovery.img"
+          test ! -e "$product/ramdisk-recovery.cpio"
+
+          # Preserve matching compiled recovery runtime as a separate support
+          # asset, so ELF can actually be assembled into recovery outside GH.
+          tar -C "$root" -cf - . | zstd -T2 -3 -o "$out/songyuan-recovery-root.tar.zst"
+          test -s "$out/songyuan-recovery-root.tar.zst"
+          (cd "$out" && sha256sum recovery songyuan-recovery-root.tar.zst > SHA256SUMS.txt)
+
+          tag="songyuan-elf-${GITHUB_RUN_ID}"
+          gh release create "$tag" \
+            "$out/recovery#recovery-songyuan-aarch64.elf" \
+            "$out/songyuan-recovery-root.tar.zst#songyuan-recovery-root.tar.zst" \
+            "$out/SHA256SUMS.txt#SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Songyuan TWRP16 ELF (run ${GITHUB_RUN_ID})" \
+            --notes "Build-only recovery output for POCO F9 Ultra (songyuan, original ID305). The ELF is NOT a flashable recovery.img. Includes the matching compiled recovery-root files and checksums for offline image assembly. No recovery image was built or uploaded by GitHub Actions."
