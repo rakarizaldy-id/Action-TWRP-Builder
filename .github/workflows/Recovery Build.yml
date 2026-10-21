@@ -185,11 +185,15 @@ jobs:
           # asset, so ELF can actually be assembled into recovery outside GH.
           tar -C "$root" -cf - . | zstd -T2 -3 -o "$out/songyuan-recovery-root.tar.zst"
           test -s "$out/songyuan-recovery-root.tar.zst"
-          (cd "$out" && sha256sum recovery songyuan-recovery-root.tar.zst > SHA256SUMS.txt)
+          # Hash the EXACT names users download. The previous workflow hashed
+          # "recovery" but renamed the uploaded asset; sha256sum -c would fail.
+          cp "$out/recovery" "$out/recovery-songyuan-aarch64.elf"
+          (cd "$out" && sha256sum recovery-songyuan-aarch64.elf songyuan-recovery-root.tar.zst > SHA256SUMS.txt)
+          (cd "$out" && sha256sum -c SHA256SUMS.txt)
 
           tag="songyuan-elf-${GITHUB_RUN_ID}"
           gh release create "$tag" \
-            "$out/recovery#recovery-songyuan-aarch64.elf" \
+            "$out/recovery-songyuan-aarch64.elf" \
             "$out/songyuan-recovery-root.tar.zst#songyuan-recovery-root.tar.zst" \
             "$out/SHA256SUMS.txt#SHA256SUMS.txt" \
             --repo "$GITHUB_REPOSITORY" \
