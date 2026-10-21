@@ -58,7 +58,7 @@ PY
 # Preflight that exact project serially BEFORE the expensive Clang/full sync.
 BAZEL_COMMON='prebuilts/bazel/common'
 echo 'Preflight original upstream Bazel common worktree serially'
-if ! timeout --signal=TERM --kill-after=40s 1200s repo sync -v -c -j1 \
+if ! timeout --signal=TERM --kill-after=40s 1200s repo sync -v -c -j1 --no-interleaved \
   --jobs-network=1 --jobs-checkout=1 --retry-fetches=3 \
   --no-clone-bundle --no-tags --fail-fast "$BAZEL_COMMON" > "$LOGS/bazel-common-sync.log" 2>&1; then
   echo '::error::Bazel common source checkout failed before Clang/full source download'
@@ -105,7 +105,9 @@ fi
 printf '%s\t%s\n' "$CLANG" "$SHA" > "$LOGS/standalone-clang-revision.tsv"
 df -hT "$TOP" | tee "$LOGS/after-clang-disk.txt"
 echo "start 391-project upstream source sync with 15GiB disk watchdog"
-setsid timeout --signal=TERM --kill-after=40s 15000s repo sync -v -c -j2 --jobs-network=2 --jobs-checkout=1 --retry-fetches=3 --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync.log" 2>&1 &
+# Current git-repo defaults to interleaved, in which --jobs-checkout
+# and --jobs-network are IGNORED; explicitly run phased fetch/checkout.
+setsid timeout --signal=TERM --kill-after=40s 15000s repo --trace sync -v -c -j2 --no-interleaved --jobs-network=2 --jobs-checkout=1 --retry-fetches=3 --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync.log" 2>&1 &
 pid=$!
 killed=0
 while kill -0 "$pid" 2>/dev/null; do
@@ -129,7 +131,7 @@ if (( rc != 0 && rc != 99 )) && grep -Fq 'Cannot initialize work tree' "$LOGS/re
   free_kib="$(df -Pk "$TOP" | awk 'END {print $4}')"
   if (( free_kib >= 31457280 )); then
     echo '::warning::Retry original source checkout ONCE in serial mode'
-    if timeout --signal=TERM --kill-after=40s 3600s repo sync -v -c -j1 \
+    if timeout --signal=TERM --kill-after=40s 3600s repo --trace sync -v -c -j1 --no-interleaved \
       --jobs-network=1 --jobs-checkout=1 --retry-fetches=3 \
       --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync-serial-retry.log" 2>&1; then
       echo 'PASS: 391 original upstream source projects recovered in serial mode'
@@ -159,17 +161,22 @@ if (( rc != 0 )); then
 import re, sys
 from pathlib import Path
 lines = Path(sys.argv[1]).read_text(errors='replace').splitlines()
-pattern = re.compile(r'fatal:|error\.GitError|Cannot initialize work tree|unable to|failed to|permission denied|operation must be run|unpack tree', re.I)
+pattern = re.compile(r'fatal:|error\.GitError|Cannot initialize work tree|read-tree|missing blob|fetch-pack|unable to|failed to|permission denied|operation must be run|unpack tree', re.I)
 hits = [i for i, line in enumerate(lines) if pattern.search(line)]
 chosen = set()
-for i in hits[-18:]:
-    chosen.update(range(max(0, i-2), min(len(lines), i+3)))
+for i in hits[-40:]:
+    chosen.update(range(max(0, i-3), min(len(lines), i+4)))
 print(f'PUBLIC-UPSTREAM-SOURCE-SYNC-ERROR-CONTEXT: {len(hits)} diagnostic lines matched')
 for i in sorted(chosen):
     text = lines[i]
     text = re.sub(r'(?i)(https?://)[^/@\s]+:[^/@\s]+@', r'\1[REDACTED]@', text)
     print(f'  L{i+1}: {text[:600]}')
 PY
+  # Capture underlying git read-tree stderr, not just Repo's wrapper.
+  if [[ -s "$LOGS/repo-sync-serial-retry.log" ]]; then
+    echo 'SERIAL-RETRY-ROOT-ERRORS:'
+    grep -iEn -C 3 'fatal:|error:|read-tree|missing blob|http.*[45][0-9][0-9]|cannot initialize work tree|failed to' "$LOGS/repo-sync-serial-retry.log" | tail -n 140 || true
+  fi
   tail -120 "$LOGS/repo-sync.log" || true
   exit 31
 fi
