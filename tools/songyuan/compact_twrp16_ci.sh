@@ -104,45 +104,9 @@ if LD_LIBRARY_PATH="$TOP/$CLANG/clang-r530567/lib:${LD_LIBRARY_PATH:-}" \
 fi
 printf '%s\t%s\n' "$CLANG" "$SHA" > "$LOGS/standalone-clang-revision.tsv"
 df -hT "$TOP" | tee "$LOGS/after-clang-disk.txt"
-echo "start 391-project upstream source sync with 15GiB disk watchdog"
-# Current git-repo defaults to interleaved, in which --jobs-checkout
-# and --jobs-network are IGNORED; explicitly run phased fetch/checkout.
-setsid timeout --signal=TERM --kill-after=40s 15000s repo --trace sync -v -c -j2 --no-interleaved --jobs-network=2 --jobs-checkout=1 --retry-fetches=3 --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync.log" 2>&1 &
-pid=$!
-killed=0
-while kill -0 "$pid" 2>/dev/null; do
-  sleep 15
-  free_kib="$(df -Pk "$TOP" | awk 'END{print $4}')"
-  used_kib="$(df -Pk "$TOP" | awk 'END{print $3}')"
-  printf '%s\t%s\t%s\n' "$(date +%s)" "$free_kib" "$used_kib" >> "$LOGS/disk-heartbeat.tsv"
-  if (( free_kib < MIN_FREE_KIB )); then
-    echo "::error::391-source sync exceeded allowed space; stopping without AOSP compile"
-    kill -TERM -- "-$pid" 2>/dev/null || true
-    killed=1
-    break
-  fi
-done
+echo "start 391 original upstream projects with bounded targeted checkout recovery"
 rc=0
-wait "$pid" || rc=$?
-if (( killed )); then rc=99; fi
-# One bounded serial recovery if original checkout init failed, never for a
-# disk-watchdog kill. Keep all 391 original source projects and exact pins.
-if (( rc != 0 && rc != 99 )) && grep -Fq 'Cannot initialize work tree' "$LOGS/repo-sync.log"; then
-  free_kib="$(df -Pk "$TOP" | awk 'END {print $4}')"
-  if (( free_kib >= 31457280 )); then
-    echo '::warning::Retry original source checkout ONCE in serial mode'
-    if timeout --signal=TERM --kill-after=40s 3600s repo --trace sync -v -c -j1 --no-interleaved \
-      --jobs-network=1 --jobs-checkout=1 --retry-fetches=3 \
-      --no-clone-bundle --no-tags --fail-fast > "$LOGS/repo-sync-serial-retry.log" 2>&1; then
-      echo 'PASS: 391 original upstream source projects recovered in serial mode'
-      rc=0
-    else
-      rc=1
-      echo '::error::Serial source sync recovery also failed'
-      tail -n 120 "$LOGS/repo-sync-serial-retry.log" || true
-    fi
-  fi
-fi
+bash "$GITHUB_WORKSPACE/tools/songyuan/recover_source_sync.sh" "$TOP" "$LOGS" "$LOGS/effective-391-projects.xml" || rc=$?
 df -hT "$TOP" | tee "$LOGS/after-repo-sync-disk.txt"
 if (( rc != 0 )); then
   echo "::error::391-source Repo sync failed (exit=$rc)"
