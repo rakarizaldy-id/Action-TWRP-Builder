@@ -1,6 +1,12 @@
 name: songyuan
 on:
   workflow_dispatch:
+    inputs:
+      graph_only:
+        description: 'Gerbang A/B: generate entire Soong+Kati graph without Android compilation'
+        type: boolean
+        required: true
+        default: true
 permissions:
   contents: write
 concurrency:
@@ -90,7 +96,22 @@ jobs:
           swapon --show=NAME --noheadings | grep -Fxq "$swap"
           free -h
           df -h "$GITHUB_WORKSPACE"
+      - name: Audit complete Soong and Make graph without Android compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$TWRP_DIR"
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export SKIP_ABI_CHECKS=true
+          lunch twrp_songyuan-bp2a-eng
+          test "$TARGET_PRODUCT" = twrp_songyuan
+          preimage="out/target/product/songyuan/obj/PACKAGING/recovery_intermediates/ramdisk_files-timestamp"
+          m --skip-ninja "$preimage"
+          test -s out/soong/installs-twrp_songyuan.mk
+          echo "PASS: entire Soong/Kati graph has no duplicate install-output rules"
       - name: Compile complete pre-image recovery tree
+        if: ${{ inputs.graph_only == false }}
         shell: bash
         run: |
           set -eo pipefail
@@ -131,11 +152,6 @@ jobs:
           ) &
           resource_monitor_pid=$!
           trap 'kill "$resource_monitor_pid" 2>/dev/null || true' EXIT
-          # Graph-only preflight: complete Soong + Kati graph, no Ninja compile.
-          # Catch ALL install-output conflicts before expensive compilation.
-          m --skip-ninja "$preimage"
-          test -s out/soong/installs-twrp_songyuan.mk
-          echo 'PASS: complete native Soong/Make graph accepts the install map'
           m -j2 "$preimage"
           test -f "$preimage"
           test -s "$product/recovery/root/system/bin/recovery"
@@ -146,6 +162,7 @@ jobs:
           test ! -e "$product/ramdisk-recovery.cpio"
           echo "PASS: original recoveryimage dependency graph built up to recovery root; no image created"
       - name: Verify ELF
+        if: ${{ inputs.graph_only == false }}
         shell: bash
         run: |
           set -euo pipefail
@@ -176,6 +193,7 @@ jobs:
           sha256sum "$out/recovery"
           echo "ELF checks complete"
       - name: Publish verified ELF release
+        if: ${{ inputs.graph_only == false }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
