@@ -60,7 +60,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" --help >/dev/null
           # Structural validation of all five actual invocation lines.
           # Excludes this preflight's own --help invocation.
-          python3 -c 'from pathlib import Path; p=Path(".github/workflows/Recovery Build.yml"); lines=[x.strip() for x in p.read_text().splitlines()]; calls=[x for x in lines if x.startswith("python3 ") and "gate_release_root.py" in x and not x.startswith("python3 -c") and "--help" not in x]; assert len(calls)==5 and all(x.startswith("python3 \"$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py\"") for x in calls), calls'
+          python3 -c 'from pathlib import Path; p=Path(".github/workflows/Recovery Build.yml"); lines=[x.strip() for x in p.read_text().splitlines()]; calls=[x for x in lines if x.startswith("python3 ") and "gate_release_root.py" in x and not x.startswith("python3 -c") and not x.startswith("python3 -m") and "--help" not in x]; assert len(calls)==5 and all(x.startswith("python3 \"$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py\"") for x in calls), calls'
           python3 tools/songyuan/patch_recovery_makefile.py --self-test
           python3 tools/songyuan/ensure_recovery_preload.py --self-test
       - name: Dependencies
