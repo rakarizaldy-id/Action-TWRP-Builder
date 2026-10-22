@@ -69,8 +69,9 @@ def run(root: Path, out: Path) -> None:
     report_path = out / "NATIVE-PROPERTY-POLICY-AUDIT.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     if report["errors"]:
-        raise ValueError("compiled policy omits types referenced by TWRP property contexts; "
-                         "see PRIVATE audit JSON")
+        for err in report["errors"]:
+            print("MISSING_PROPERTY_POLICY: " + err)
+        raise ValueError("compiled policy omits types referenced by TWRP property contexts")
     print("PASS: TWRP property context type-name guard; "
           "SELinux runtime / allow rules NOT PROVEN")
 
