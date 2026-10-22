@@ -142,7 +142,11 @@ def save():
     report_file.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 save()
 if missing or nonarm:
-    print("BLOCKED: incomplete first-party recovery boot root; see PRIVATE JSON")
+    print("BLOCKED: incomplete first-party recovery boot root")
+    for item in sorted(set(missing)):
+        print("  MISSING_BOOT_CONTRACT: " + item)
+    for item in sorted(set(nonarm)):
+        print("  NON_ARM64_BOOT_CONTRACT: " + item)
     sys.exit(18)
 
 dest = out / "native-boot-contract"
