@@ -100,16 +100,31 @@ assert "$(DEVICE_PATH)/prebuilt/vendor_dlkm/lib/modules/$(module):recovery/root/
 assert (root / "prebuilt/kernel").stat().st_size == 42097152
 assert (root / "recovery/root/odm/bin/hw/vendor.xiaomi.hardware.vibratorfeature.service").stat().st_mode & 0o111, "native vibrator HAL must be executable"
 
-mounts = set()
+# Native Songyuan ID305 fstab uses paired ext4/erofs entries at the same
+# mount point. Reject accidental duplicate filesystem types instead of
+# rejecting genuine original Xiaomi mount topology.
+mounts = {}
+dual_fs_mounts = {
+    "/system", "/system_ext", "/product", "/vendor", "/odm",
+    "/mnt/vendor/mi_ext", "/mi_ext",
+}
 for line in fstab.splitlines():
     line = line.strip()
     if not line or line.startswith("#"):
         continue
     columns = line.split()
     assert len(columns) == 5, line
-    assert columns[1] not in mounts, columns[1]
-    mounts.add(columns[1])
+    mount, fs = columns[1], columns[2]
+    seen = mounts.setdefault(mount, set())
+    assert fs not in seen, (mount, fs)
+    if seen:
+        assert mount in dual_fs_mounts and seen | {fs} == {"ext4", "erofs"}, (mount, seen, fs)
+    seen.add(fs)
 assert {"/data", "/metadata", "/system", "/vendor"} <= mounts
+assert mounts["/metadata"] == {"f2fs"}
+assert mounts["/data"] == {"f2fs"}
+assert mounts["/mnt/vendor/mi_ext"] == {"ext4", "erofs"}
+assert mounts["/mi_ext"] == {"ext4", "erofs"}
 
 services = {}
 starts = set()
