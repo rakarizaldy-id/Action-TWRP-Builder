@@ -228,9 +228,39 @@ jobs:
           test ! -e "$product/ramdisk-recovery.img"
           test ! -e "$product/ramdisk-recovery.cpio"
 
-          # Preserve matching compiled recovery runtime as a separate support
-          # asset, so ELF can actually be assembled into recovery outside GH.
-          tar -C "$root" -cf - . | zstd -T2 -3 -o "$out/songyuan-recovery-root.tar.zst"
+          # Package the exact same-build runtime closure that Verify ELF audited.
+          # Previously Verify could find libraries in product/system while the
+          # release tar only contained recovery/root. Ship those audited
+          # source-built libraries together, without mutating the built root
+          # or creating an Android image.
+          test -d "$out/runtime-closure"
+          bundle="$out/release-root"
+          mkdir "$bundle"
+          rsync -a "$root/" "$bundle/"
+          added=0
+          reused=0
+          while IFS= read -r -d '' dep; do
+            rel="${dep#"$out/runtime-closure/"}"
+            dst="$bundle/$rel"
+            if [[ -e "$dst" || -L "$dst" ]]; then
+              if ! cmp -s "$dep" "$dst"; then
+                echo "::error::Conflicting source-built runtime dependency in release root: $rel"
+                exit 17
+              fi
+              reused=$((reused + 1))
+            else
+              mkdir -p "$(dirname "$dst")"
+              destdir="$(realpath "$(dirname "$dst")")"
+              case "$destdir" in
+                "$bundle"|"$bundle"/*) ;;
+                *) echo "::error::Runtime dependency escaped release root"; exit 18 ;;
+              esac
+              cp -p -- "$dep" "$dst"
+              added=$((added + 1))
+            fi
+          done < <(find "$out/runtime-closure" -type f -print0)
+          echo "PASS: release root contains audited same-build runtime closure (new=$added, already_present=$reused)"
+          tar -C "$bundle" -cf - . | zstd -T2 -3 -o "$out/songyuan-recovery-root.tar.zst"
           test -s "$out/songyuan-recovery-root.tar.zst"
           # Hash the EXACT names users download. The previous workflow hashed
           # "recovery" but renamed the uploaded asset; sha256sum -c would fail.
