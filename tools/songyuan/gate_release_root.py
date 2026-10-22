@@ -76,6 +76,20 @@ def check(dt, root, repair):
         if not dest.is_file() or dest.stat().st_size!=expected["bytes"] or hash_file(dest)!=expected["sha256"]:
             raise RuntimeError("OEM missing or invalid from final recovery root: "+rel)
 
+    # Upstream TWRP owns init.recovery.mksh.rc, so device.mk MUST NOT
+    # install the same destination a second time. The upstream root from
+    # this exact compile omitted it: restore only from pinned Songyuan
+    # upstream-equivalent source if it is still missing after staging.
+    mksh=require(dt,"recovery/root/init.recovery.mksh.rc")
+    if mksh.read_bytes()!=b"on init\n    export ENV /etc/mkshrc\n":
+        raise RuntimeError("Unexpected mksh init contents")
+    mksh_dest=safe(root,"init.recovery.mksh.rc")
+    if repair and not mksh_dest.exists() and not mksh_dest.is_symlink():
+        shutil.copy2(mksh,mksh_dest)
+        restored.append("init.recovery.mksh.rc")
+    if not mksh_dest.is_file() or mksh_dest.read_bytes()!=mksh.read_bytes():
+        raise RuntimeError("mksh init missing or modified in final recovery root")
+
     natives=group(mk,"SONGYUAN_RECOVERY_FILE_PATHS")
     for rel in natives: require(root,rel)
     modules=group(mk,"SONGYUAN_MODULE_CLOSURE")
