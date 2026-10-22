@@ -29,14 +29,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: rakarizaldy-id/android_device_xiaomi_songyuan-recovery
-          ref: ee0530fb30648a9a1c7b6f569d92ceb72b4d43b1
+          ref: bf25053ebb940f59cfb2c2d064e3bd37c2dd3d44
           path: project
           persist-credentials: false
       - name: Verify
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C project rev-parse HEAD)" = "ee0530fb30648a9a1c7b6f569d92ceb72b4d43b1"
+          test "$(git -C project rev-parse HEAD)" = "bf25053ebb940f59cfb2c2d064e3bd37c2dd3d44"
           test "${RUNNER_ENVIRONMENT:-}" = github-hosted
           test "$(df -Pk "$GITHUB_WORKSPACE" | awk 'END{print $2}')" -ge 131072000
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/share/powershell /usr/local/.ghcup /opt/ghc /usr/share/swift /opt/hostedtoolcache
@@ -168,6 +168,14 @@ jobs:
           trap 'kill "$resource_monitor_pid" 2>/dev/null || true' EXIT
           m -j2 "$preimage"
           test -f "$preimage"
+          # Reconcile only hash-pinned Songyuan ID305 OEM files omitted by
+          # baseline staging/relink. Fail on modified source/destination.
+          # This is NOT an Android build and does not add donor binaries.
+          python3 tools/songyuan/gate_release_root.py \
+            "$SONGYUAN_DT_ROOT" "$product/recovery/root" --repair-missing-oem
+          # All selected OEMs, mounts, service programs and imports now PASS.
+          python3 tools/songyuan/gate_release_root.py \
+            "$SONGYUAN_DT_ROOT" "$product/recovery/root"
           test -s "$product/recovery/songyuan-rsync-excludes.txt"
           grep -Fxq '/root/odm/firmware' "$product/recovery/songyuan-rsync-excludes.txt"
           test -d "$product/recovery/root/odm/firmware"
@@ -190,6 +198,7 @@ jobs:
           out="$RUNNER_TEMP/songyuan-checked"
           mkdir -p "$out/paired-runtime"
           python3 tools/songyuan/ensure_recovery_preload.py "$root"
+          python3 tools/songyuan/gate_release_root.py "$SONGYUAN_DT_ROOT" "$root"
           source=""
           for p in "$root/system/bin/recovery" "$root/sbin/recovery" "$product/obj/EXECUTABLES/recovery_intermediates/recovery"; do
             if [[ -s "$p" ]] && readelf -h "$p" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
@@ -260,8 +269,17 @@ jobs:
             fi
           done < <(find "$out/runtime-closure" -type f -print0)
           echo "PASS: release root contains audited same-build runtime closure (new=$added, already_present=$reused)"
+          python3 tools/songyuan/gate_release_root.py "$SONGYUAN_DT_ROOT" "$bundle"
           tar -C "$bundle" -cf - . | zstd -T2 -3 -o "$out/songyuan-recovery-root.tar.zst"
           test -s "$out/songyuan-recovery-root.tar.zst"
+          # Independently unpack EXACT bytes that are about to be released.
+          # No PASS based only on copy-task logs, a build-root snapshot,
+          # or source-built ELF DT_NEEDED closure.
+          verify_dir="$(mktemp -d "$RUNNER_TEMP/songyuan-release-gate.XXXXXX")"
+          trap 'rm -rf "$verify_dir"' EXIT
+          tar -I zstd -xf "$out/songyuan-recovery-root.tar.zst" -C "$verify_dir"
+          python3 tools/songyuan/gate_release_root.py "$SONGYUAN_DT_ROOT" "$verify_dir"
+          echo "PASS: compressed GitHub Release archive independently audited"
           # Hash the EXACT names users download. The previous workflow hashed
           # "recovery" but renamed the uploaded asset; sha256sum -c would fail.
           cp "$out/recovery" "$out/recovery-songyuan-aarch64.elf"
