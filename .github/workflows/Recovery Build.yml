@@ -54,6 +54,9 @@ jobs:
           python3 tools/songyuan/extract_failed_sync_projects.py --self-test
           python3 tools/songyuan/check_ci_envsetup_contract.py ".github/workflows/Recovery Build.yml"
           python3 tools/songyuan/patch_recovery_makefile.py --self-test
+          python3 tools/songyuan/complete_recovery_boot_root.py --self-test
+          python3 tools/songyuan/ensure_recovery_preload.py --self-test
+          python3 tools/songyuan/check_recovery_property_contexts.py --self-test
       - name: Dependencies
         shell: bash
         run: |
@@ -189,6 +192,7 @@ jobs:
           out="$RUNNER_TEMP/songyuan-checked"
           mkdir -p "$out/paired-runtime"
           python3 tools/songyuan/ensure_recovery_preload.py "$root"
+          python3 tools/songyuan/complete_recovery_boot_root.py "$TWRP_DIR"
           source=""
           for p in "$root/system/bin/recovery" "$root/sbin/recovery" "$product/obj/EXECUTABLES/recovery_intermediates/recovery"; do
             if [[ -s "$p" ]] && readelf -h "$p" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
