@@ -53,6 +53,7 @@ jobs:
           bash -n tools/songyuan/recover_source_sync.sh
           python3 tools/songyuan/extract_failed_sync_projects.py --self-test
           python3 tools/songyuan/check_ci_envsetup_contract.py ".github/workflows/Recovery Build.yml"
+          python3 tools/songyuan/patch_recovery_makefile.py --self-test
       - name: Dependencies
         shell: bash
         run: |
@@ -80,6 +81,11 @@ jobs:
           # recovery overlay, VINTF/fstab paths and source graph contracts.
           python3 tools/songyuan/audit_recovery_copy_map.py "$TWRP_DIR/device/xiaomi/songyuan"
           python3 tools/songyuan/verify_recovery_install_owners.py "$TWRP_DIR" "$TWRP_DIR/device/xiaomi/songyuan"
+
+          # The first-party recovery root must take precedence over baseline
+          # partition-redirect symlinks, without changing firmware contents.
+          python3 tools/songyuan/prepare_recovery_rsync.py --self-test
+          python3 tools/songyuan/patch_recovery_makefile.py "$TWRP_DIR/build/make/core/Makefile"
       - name: Provision proven Songyuan build swap
         shell: bash
         run: |
@@ -138,6 +144,8 @@ jobs:
           grep -Fq '$(recovery_uncompressed_ramdisk): $(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP)' "$makefile"
           grep -Fq '$(recovery_ramdisk): $(recovery_uncompressed_ramdisk)' "$makefile"
           grep -Fq '$(INSTALLED_RECOVERYIMAGE_TARGET): $(recoveryimage-deps)' "$makefile"
+          grep -Fq 'prepare_recovery_rsync.py' "$makefile"
+          grep -Fq -- '--exclude-from=$(TARGET_RECOVERY_OUT)/songyuan-rsync-excludes.txt' "$makefile"
           product=out/target/product/songyuan
           preimage="$product/obj/PACKAGING/recovery_intermediates/ramdisk_files-timestamp"
 
@@ -159,6 +167,11 @@ jobs:
           trap 'kill "$resource_monitor_pid" 2>/dev/null || true' EXIT
           m -j2 "$preimage"
           test -f "$preimage"
+          test -s "$product/recovery/songyuan-rsync-excludes.txt"
+          grep -Fxq '/root/odm/firmware' "$product/recovery/songyuan-rsync-excludes.txt"
+          test -d "$product/recovery/root/odm/firmware"
+          test ! -L "$product/recovery/root/odm/firmware"
+          cmp -s "$product/recovery/root/odm/firmware/focaltech_ts_fw_songyuan.bin" "$TWRP_DIR/device/xiaomi/songyuan/prebuilt/odm/firmware/focaltech_ts_fw_songyuan.bin"
           test -s "$product/recovery/root/system/bin/recovery"
           cmp -s "$product/recovery/root/init.recovery.usb.rc" "$TWRP_DIR/device/xiaomi/songyuan/usb/init.recovery.usb.rc"
           cmp -s "$product/recovery/root/system/etc/recovery.fstab" "$TWRP_DIR/device/xiaomi/songyuan/recovery.fstab"
