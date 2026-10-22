@@ -120,7 +120,7 @@ for line in fstab.splitlines():
     if seen:
         assert mount in dual_fs_mounts and seen | {fs} == {"ext4", "erofs"}, (mount, seen, fs)
     seen.add(fs)
-assert {"/data", "/metadata", "/system", "/vendor"} <= mounts
+assert {"/data", "/metadata", "/system", "/vendor"} <= set(mounts)
 assert mounts["/metadata"] == {"f2fs"}
 assert mounts["/data"] == {"f2fs"}
 assert mounts["/mnt/vendor/mi_ext"] == {"ext4", "erofs"}
