@@ -53,6 +53,13 @@ jobs:
           bash -n tools/songyuan/recover_source_sync.sh
           python3 tools/songyuan/extract_failed_sync_projects.py --self-test
           python3 tools/songyuan/check_ci_envsetup_contract.py ".github/workflows/Recovery Build.yml"
+          # Fail in the first Verify step if the workspace-local root gate is
+          # missing; later Compile has changed directory into the TWRP tree.
+          test -s "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py"
+          python3 -m py_compile "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py"
+          python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" --help >/dev/null
+          test "$(grep -Fc 'python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py"' ".github/workflows/Recovery Build.yml")" -eq 5
+          ! grep -Fq 'python3 tools/songyuan/gate_release_root.py' ".github/workflows/Recovery Build.yml"
           python3 tools/songyuan/patch_recovery_makefile.py --self-test
           python3 tools/songyuan/ensure_recovery_preload.py --self-test
       - name: Dependencies
@@ -171,10 +178,10 @@ jobs:
           # Reconcile only hash-pinned Songyuan ID305 OEM files omitted by
           # baseline staging/relink. Fail on modified source/destination.
           # This is NOT an Android build and does not add donor binaries.
-          python3 tools/songyuan/gate_release_root.py \
+          python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" \
             "$SONGYUAN_DT_ROOT" "$product/recovery/root" --repair-missing-oem
           # All selected OEMs, mounts, service programs and imports now PASS.
-          python3 tools/songyuan/gate_release_root.py \
+          python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" \
             "$SONGYUAN_DT_ROOT" "$product/recovery/root"
           test -s "$product/recovery/songyuan-rsync-excludes.txt"
           grep -Fxq '/root/odm/firmware' "$product/recovery/songyuan-rsync-excludes.txt"
@@ -198,7 +205,7 @@ jobs:
           out="$RUNNER_TEMP/songyuan-checked"
           mkdir -p "$out/paired-runtime"
           python3 tools/songyuan/ensure_recovery_preload.py "$root"
-          python3 tools/songyuan/gate_release_root.py "$SONGYUAN_DT_ROOT" "$root"
+          python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" "$SONGYUAN_DT_ROOT" "$root"
           source=""
           for p in "$root/system/bin/recovery" "$root/sbin/recovery" "$product/obj/EXECUTABLES/recovery_intermediates/recovery"; do
             if [[ -s "$p" ]] && readelf -h "$p" 2>/dev/null | grep -q 'Machine:.*AArch64'; then
@@ -269,7 +276,7 @@ jobs:
             fi
           done < <(find "$out/runtime-closure" -type f -print0)
           echo "PASS: release root contains audited same-build runtime closure (new=$added, already_present=$reused)"
-          python3 tools/songyuan/gate_release_root.py "$SONGYUAN_DT_ROOT" "$bundle"
+          python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" "$SONGYUAN_DT_ROOT" "$bundle"
           tar -C "$bundle" -cf - . | zstd -T2 -3 -o "$out/songyuan-recovery-root.tar.zst"
           test -s "$out/songyuan-recovery-root.tar.zst"
           # Independently unpack EXACT bytes that are about to be released.
@@ -278,7 +285,7 @@ jobs:
           verify_dir="$(mktemp -d "$RUNNER_TEMP/songyuan-release-gate.XXXXXX")"
           trap 'rm -rf "$verify_dir"' EXIT
           tar -I zstd -xf "$out/songyuan-recovery-root.tar.zst" -C "$verify_dir"
-          python3 tools/songyuan/gate_release_root.py "$SONGYUAN_DT_ROOT" "$verify_dir"
+          python3 "$GITHUB_WORKSPACE/tools/songyuan/gate_release_root.py" "$SONGYUAN_DT_ROOT" "$verify_dir"
           echo "PASS: compressed GitHub Release archive independently audited"
           # Hash the EXACT names users download. The previous workflow hashed
           # "recovery" but renamed the uploaded asset; sha256sum -c would fail.
