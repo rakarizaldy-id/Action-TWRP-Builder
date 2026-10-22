@@ -80,14 +80,14 @@ def check(dt, root, repair):
     # install the same destination a second time. The upstream root from
     # this exact compile omitted it: restore only from pinned Songyuan
     # upstream-equivalent source if it is still missing after staging.
-    mksh=require(dt,"recovery/root/init.recovery.mksh.rc")
-    if mksh.read_bytes()!=b"on init\n    export ENV /etc/mkshrc\n":
-        raise RuntimeError("Unexpected mksh init contents")
+    # No second Make/Soong owner for this upstream TWRP init import.
+    # Restore only its canonical generic init contents as a packaging fallback.
+    mksh_data=b"on init\n    export ENV /etc/mkshrc\n"
     mksh_dest=safe(root,"init.recovery.mksh.rc")
     if repair and not mksh_dest.exists() and not mksh_dest.is_symlink():
-        shutil.copy2(mksh,mksh_dest)
+        mksh_dest.write_bytes(mksh_data)
         restored.append("init.recovery.mksh.rc")
-    if not mksh_dest.is_file() or mksh_dest.read_bytes()!=mksh.read_bytes():
+    if not mksh_dest.is_file() or mksh_dest.read_bytes()!=mksh_data:
         raise RuntimeError("mksh init missing or modified in final recovery root")
 
     natives=group(mk,"SONGYUAN_RECOVERY_FILE_PATHS")
