@@ -139,7 +139,11 @@ for rc in (root / "recovery/root").rglob("*.rc"):
         elif stmt[0] == "start":
             assert len(stmt) == 2
             starts.add(stmt[1])
-assert starts <= set(services) | {"adbd"}, sorted(starts - set(services) - {"adbd"})
+# Native TWRP Soong owns BootControl's init service; it is not a DT *.rc.
+# Ekin starts it on servicemanager.ready=true, via this exact package.
+assert "android.hardware.boot-service.default_recovery" in device
+external_init_services = {"adbd", "vendor.boot-default"}
+assert starts <= set(services) | external_init_services, sorted(starts - set(services) - external_init_services)
 assert {"vendor.qseecomd", "vendor.minkdaemon", "vendor.secure_element",
         "miweaver_hal_service", "weaver_hal_service", "odm.prepdecrypt"} <= services.keys()
 

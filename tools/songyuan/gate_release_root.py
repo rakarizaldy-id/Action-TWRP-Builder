@@ -55,8 +55,8 @@ def check(dt, root, repair):
     manifest=json.loads((dt/"prebuilt/curated-manifest.json").read_text())
     if manifest["device"]!="songyuan" or manifest["source_firmware"]!="OS3.0.305.0.WGNIDXM":
         raise RuntimeError("Incorrect original ID305 source")
-    if "BOARD_AVB_ENABLE := false" not in board or "TW_INCLUDE_WIFI := false" not in board:
-        raise RuntimeError("No-AVB / no-Wi-Fi board contract violated")
+    if "BOARD_AVB_ENABLE := true" not in board or "TW_INCLUDE_WIFI := false" not in board:
+        raise RuntimeError("Ekin-compatible image AVB config / no-Wi-Fi contract violated")
     oem=[x for k in OEM_GROUPS for x in group(mk,k)]
     if len(oem)!=59 or len(set(oem))!=len(oem):
         raise RuntimeError("Expected 59 unique selected ID305 OEM files")
