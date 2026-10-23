@@ -27,6 +27,8 @@ fstab = (root / "recovery.fstab").read_text()
 assert "PRODUCT_DEVICE := songyuan" in product
 assert "PRODUCT_NAME := twrp_songyuan" in product
 assert "TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilt/kernel" in board
+assert "BOARD_SEPOLICY_DIRS += $(DEVICE_PATH)/sepolicy" in board
+assert (root / "sepolicy/file_contexts").read_text().strip() == "/dev/block/sda12    u:object_r:misc_block_device:s0"
 assert "BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true" in board
 assert "BOARD_RECOVERYIMAGE_PARTITION_SIZE := 104857600" in board
 assert "TW_INCLUDE_CRYPTO_FBE := true" in board
