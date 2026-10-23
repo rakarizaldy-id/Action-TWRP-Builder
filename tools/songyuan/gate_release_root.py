@@ -105,7 +105,7 @@ def check(dt, root, repair):
     if misc_context != "/dev/block/sda12    u:object_r:misc_block_device:s0":
         raise RuntimeError("Unexpected native misc device label")
     contexts = require(root,"file_contexts").read_text()
-    if not re.search(r"(?m)^/dev/block/sda12\\s+u:object_r:misc_block_device:s0\\s*$", contexts):
+    if not re.search(r"(?m)^/dev/block/sda12\s+u:object_r:misc_block_device:s0\s*$", contexts):
         raise RuntimeError("BootControl misc block SELinux label was not installed into recovery")
     fstab=require(root,"system/etc/recovery.fstab").read_bytes()
     if fstab!=require(dt,"recovery.fstab").read_bytes():
